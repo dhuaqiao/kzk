@@ -29,7 +29,9 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 	
 	private static final Logger logger = LoggerFactory.getLogger(HardWareDecoder.class);
 	
-	public static final AttributeKey<String> NETTY_CHANNEL_KEY = AttributeKey.valueOf("netty.channel.user_pack"); 
+	public static final AttributeKey<String> NETTY_CHANNEL_KEY = AttributeKey.valueOf("netty.channel.user_pack");
+
+	public static final  Integer MAX_HEADER_SIZE = 10000;
 	
 	//开始读取,内容,完成
 	private boolean isReady = true;
@@ -68,7 +70,7 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 				if(in.readableBytes()>1) {
 					transCoding(in, data,baos);//转码...
 				}
-				if(baos.size()>1400){
+				if(baos.size()>MAX_HEADER_SIZE){
 					System.out.println("error....");
 					baos.reset();//超过了数据包长度,丢弃无效数据
 				}
