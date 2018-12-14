@@ -14,6 +14,16 @@ public class NettyServerApp {
 		System.out.println(v);
 		System.out.println((byte)0xA5);
 		System.out.println((byte)0xAE);
+		byte[] binary = {51,57,52,54,49,50};
+		System.out.println(new String(binary));
+		/**
+		33 51
+		39 57
+		34 52
+		36 54
+		31 49
+		32 50
+		*/
 		SpringApplication app = new SpringApplication(NettyServerInitializer.class);
 		app.setWebApplicationType(WebApplicationType.NONE);
 		app.setRegisterShutdownHook(true);

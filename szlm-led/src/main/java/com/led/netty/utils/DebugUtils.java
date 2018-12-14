@@ -1,11 +1,13 @@
 package com.led.netty.utils;
 
+import lombok.Data;
+import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@Slf4j
 public class DebugUtils {
-	
-	private static final Logger logger = LoggerFactory.getLogger(DebugUtils.class);
 
 	public static void debugData(String desc, byte[] data) {
 		StringBuilder _builderCtx = new StringBuilder();
@@ -27,7 +29,7 @@ public class DebugUtils {
 				//System.out.println();
 			}
 		}
-		//System.out.println(desc);
-		logger.info("info:{}",_builderCtx.toString());
+		System.out.println(desc);
+		log.info("info:{}",_builderCtx.toString());
 	}
 }

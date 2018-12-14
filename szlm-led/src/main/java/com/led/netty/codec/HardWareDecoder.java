@@ -54,7 +54,7 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 	protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
 		while(in.isReadable()) {
 			byte data = in.readByte();
-			System.out.println(Integer.toHexString(data));
+			System.out.println(Integer.toHexString(data) +" "+data);
 			boolean is0xA5 = data==DATA_BEGIN;
 			boolean is0xAE = data==DATA_END;
 			if(isReady && is0xA5) {//数据开头
@@ -134,20 +134,20 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 			logger.info("转码");
 			if(in.isReadable()) {
 				byte dataNext = in.readByte();
-				if (0x05 == dataNext) {
+				if ((byte)0x05 == dataNext) {
 					baos.write(0xa5);
-				}else if (0x0e == dataNext) {
+				}else if ((byte)0x0e == dataNext) {
 					baos.write(0xae);
-				}else if (0x0a == dataNext) {
+				}else if ((byte)0x0a == dataNext) {
 					baos.write(0xaa);
-				}else if(0x68==dataNext){//数据协议开始
-					baos.write(0x68);
-					byte[] binaryCard = baos.toByteArray();
-					controlCardId = ByteBufUtil.hexDump(binaryCard);
-					System.out.println("controlCardId "+controlCardId);
 				}else{
 					baos.write(data);
 					baos.write(dataNext);
+					if((byte)0x68==dataNext) {//数据协议开始
+						byte[] binaryCard = baos.toByteArray();
+						controlCardId = ByteBufUtil.hexDump(binaryCard);
+						System.out.println("controlCardId "+controlCardId);
+					}
 				}
 			}else { //channel无最新数据,数据粘包
 				System.out.println("channel无最新数据,数据粘包");
@@ -155,7 +155,14 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 				baos.write(data);
 			}
 		}else{
-			baos.write(data);
+			if((byte)0x68==data){//数据协议开始
+				baos.write(0x68);
+				byte[] binaryCard = baos.toByteArray();
+				controlCardId = ByteBufUtil.hexDump(binaryCard);
+				System.out.println("controlCardId "+controlCardId);
+			}else {
+				baos.write(data);
+			}
 		}
 		return data;
 	}
