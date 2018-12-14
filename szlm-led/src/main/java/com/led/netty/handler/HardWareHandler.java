@@ -23,6 +23,8 @@ public class HardWareHandler extends SimpleChannelInboundHandler<Object>{
 		}else if(msg instanceof SetUpTimeCommand) {
 			System.out.println("授时...");
 			ctx.writeAndFlush(msg);
+		}else{
+			ctx.writeAndFlush(msg);
 		}
 	}
 	

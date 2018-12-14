@@ -21,30 +21,33 @@ import io.netty.handler.codec.MessageToMessageEncoder;
  * @author Administrator
  *
  */
-public class HardWareEncoder extends MessageToMessageEncoder<AbstractCommand> {
+public class HardWareEncoder extends MessageToMessageEncoder<Object> {
 
 	private static final Logger logger = LoggerFactory.getLogger(HardWareEncoder.class);
 
 	@Override
-	protected void encode(ChannelHandlerContext ctx, AbstractCommand msg, List<Object> out) throws Exception {
+	protected void encode(ChannelHandlerContext ctx, Object msg, List<Object> out) throws Exception {
 		logger.info("HardWareEncoder encode ");
 		System.out.println("HardWareEncoder encode ");
 		if(msg instanceof LoginCommand) {
 			System.out.println("HardWareEncoder 登录...");
 			LoginCommand loginCmd = (LoginCommand) msg;
-			byte[] datas = PackDataUtils.packReplayLoginData(loginCmd);
+			byte[] datas = PackDataUtils.PACKAGE_OPEN_CMD;
 			ByteBuf buf = Unpooled.copiedBuffer(datas);
 			out.add(buf);
 		}else if(msg instanceof HeartBeatCommand) {
 			System.out.println("HardWareEncoder 心跳...");
-			byte[] datas = PackDataUtils.heart;
+			byte[] datas = PackDataUtils.PACKAGE_OPEN_CMD;
 			ByteBuf buf = Unpooled.copiedBuffer(datas);
 			out.add(buf);
 		}else if(msg instanceof SetUpTimeCommand) {
 			System.out.println("HardWareEncoder 授时...");
 			SetUpTimeCommand stcCmd = (SetUpTimeCommand) msg;
-			byte[] datas = PackDataUtils.packReplaySetUpTimeData(stcCmd);
+			byte[] datas = PackDataUtils.PACKAGE_OPEN_CMD;
 			ByteBuf buf = Unpooled.copiedBuffer(datas);
+			out.add(buf);
+		}else{
+			ByteBuf buf = Unpooled.copiedBuffer((byte[]) msg);
 			out.add(buf);
 		}
 	}

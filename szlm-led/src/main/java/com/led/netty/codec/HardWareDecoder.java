@@ -39,17 +39,31 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
     private ByteArrayOutputStream baos = new ByteArrayOutputStream();
 	//前一个数据
     private byte previousData = -1;
+
+    //控制卡设备id
+	private String controlCardId;
+
+	//包头
+	public static final byte DATA_BEGIN = (byte)0xA5;
+	//包尾
+	public static final byte DATA_END = (byte)0xAE;
+	//转码标识
+	public static final byte DATA_NEED = (byte)0xAA;
+
 	@Override
 	protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
 		while(in.isReadable()) {
 			byte data = in.readByte();
-			boolean is0xA5 = 0xA5==data;
-			boolean is0xAE = 0xAE==data;
+			System.out.println(Integer.toHexString(data));
+			boolean is0xA5 = data==DATA_BEGIN;
+			boolean is0xAE = data==DATA_END;
 			if(isReady && is0xA5) {//数据开头
+				checkDataAndReset(baos);
 				isReady = false;
 				baos.reset();//重置数据,可能是无效的数据
 				baos.write(data);
 			}else if(is0xAE) {//数据结尾
+				checkDataAndReset(baos);
 				baos.write(data);
 				isReady = true;
 				//完成数据读取...
@@ -59,26 +73,32 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 				System.out.println(hexDump);
 				System.out.println("hexDump:"+hexDump.length());
 				AbstractCommand cmd = PackDataUtils.binaryTransCmd(datas);
-				if(null!=cmd) {
+				if(null!=cmd) { //写数据
 					cmd.setDataBinary(datas);
 					out.add(cmd);
+				}else{
+					out.add(datas);
 				}
 				//完整的数据包...
 				previousData = -1;
 				baos.reset();//重置...
 			}else {
-				if(in.readableBytes()>1) {
-					transCoding(in, data,baos);//转码...
-				}
-				if(baos.size()>MAX_HEADER_SIZE){
-					System.out.println("error....");
-					baos.reset();//超过了数据包长度,丢弃无效数据
-				}
+				checkDataAndReset(baos);
+				transCoding(in, data,baos);//转码...
 			}
 		}
 	}
+
+	public void checkDataAndReset(ByteArrayOutputStream baos){
+		if(validateHead(baos)){
+			System.out.println("error....");
+			baos.reset();//超过了数据包长度,丢弃无效数据
+		}
+	}
 	
-	
+	public boolean validateHead(ByteArrayOutputStream baos){
+		return MAX_HEADER_SIZE <= baos.size();
+	}
 	
 	/**
 	 * 转码
@@ -110,7 +130,7 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 	 * @return
 	 */
 	protected int transCoding(ByteBuf in,byte data,boolean isTransCode,ByteArrayOutputStream baos) {
-		if(0xAA==data || previousData==0xAA) {//转码
+		if(DATA_NEED==data || previousData==DATA_NEED) {//转码
 			logger.info("转码");
 			if(in.isReadable()) {
 				byte dataNext = in.readByte();
@@ -120,10 +140,22 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 					baos.write(0xae);
 				}else if (0x0a == dataNext) {
 					baos.write(0xaa);
+				}else if(0x68==dataNext){//数据协议开始
+					baos.write(0x68);
+					byte[] binaryCard = baos.toByteArray();
+					controlCardId = ByteBufUtil.hexDump(binaryCard);
+					System.out.println("controlCardId "+controlCardId);
+				}else{
+					baos.write(data);
+					baos.write(dataNext);
 				}
 			}else { //channel无最新数据,数据粘包
+				System.out.println("channel无最新数据,数据粘包");
 				previousData = data;
+				baos.write(data);
 			}
+		}else{
+			baos.write(data);
 		}
 		return data;
 	}
