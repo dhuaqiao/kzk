@@ -30,5 +30,11 @@ public class NettyServerApp {
 		app.setWebApplicationType(WebApplicationType.NONE);
 		app.setRegisterShutdownHook(true);
 		app.run(args);
+		Runtime.getRuntime().addShutdownHook(new Thread(){
+			@Override
+			public void run() {
+				System.out.println(" java ...");
+			}
+		});
 	}
 }

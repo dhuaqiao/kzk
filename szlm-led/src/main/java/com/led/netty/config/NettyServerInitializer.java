@@ -1,21 +1,20 @@
 package com.led.netty.config;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
-import javax.net.ssl.SSLException;
-
 import com.led.netty.codec.HardWareDecoder;
 import com.led.netty.codec.HardWareEncoder;
 import com.led.netty.handler.HardWareHandler;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.ssl.SslContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelPipeline;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.handler.ssl.SslContext;
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
+import javax.net.ssl.SSLException;
 
 @SpringBootApplication(scanBasePackages = { "com.led.netty.config", "com.led.netty" })
 public class NettyServerInitializer extends ChannelInitializer<SocketChannel> {
