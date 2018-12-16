@@ -19,17 +19,18 @@ public class DebugUtils {
 			}
 			String hexString = Integer.toHexString(b);
 			hexString = (hexString.length() == 1) ? "0" + hexString : hexString;
-			//System.out.print(hexString + " ");
+			System.out.print(hexString + " ");
 			_builderCtx.append(hexString).append(" ");
 			count++;
 			if (count % 4 == 0) {
-				// System.out.print("  ");
+				 System.out.print("  ");
 			}
 			if (count % 32 == 0) {
-				//System.out.println();
+				System.out.println();
 			}
 		}
-		System.out.println(desc);
 		log.info("info:{}",_builderCtx.toString());
 	}
+
+
 }

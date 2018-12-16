@@ -2,7 +2,6 @@ package com.led.netty.codec;
 
 
 import com.led.netty.pojo.AbstractCommand;
-import com.led.netty.utils.CRC16;
 import com.led.netty.utils.DebugUtils;
 import com.led.netty.utils.IOUtils;
 import com.led.netty.utils.PackDataUtils;
@@ -18,17 +17,16 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 
 /**
- * Decoder
+ * Decoder 標識
  * @author Administrator
  *
  */
-public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Closeable{
+public class HardWareDecoderOriginal extends ByteToMessageDecoder implements java.io.Closeable{
 	
-	private static final Logger logger = LoggerFactory.getLogger(HardWareDecoder.class);
+	private static final Logger logger = LoggerFactory.getLogger(HardWareDecoderOriginal.class);
 	
 	public static final AttributeKey<String> NETTY_CHANNEL_KEY = AttributeKey.valueOf("netty.channel.user_pack");
 
@@ -40,14 +38,9 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
     private ByteArrayOutputStream baos = new ByteArrayOutputStream();
 	//前一个数据
     private byte previousData = -1;
-	//计数,计算包类型出现的位置...
-	private AtomicInteger packageCount = new AtomicInteger();
-	//包类型出现位置
-	private int indexPackageType = -1;
+
     //控制卡设备id
 	private String controlCardId;
-	//控制卡设备id 数组
-	private byte[] cardDeviceId;
 
 	//包头
 	public static final byte DATA_BEGIN = (byte)0xA5;
@@ -61,22 +54,15 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 	public static final byte DATA_CONVERT_0X0E = (byte)0x0E;
 	//
 	public static final byte DATA_CONVERT_0X0A = (byte)0x0A;
-	//区分当前是心跳包还是正常数据包,默认是心跳包......
-	private volatile boolean isHeartPackage = true;
 
 
 	@Override
 	protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
 		while(in.isReadable()) {
 			byte data = in.readByte();
-			packageCount.incrementAndGet();
-			//System.out.println(Integer.toHexString(data) +" "+data);
+			System.out.println(Integer.toHexString(data) +" "+data);
 			boolean is0xA5 = data==DATA_BEGIN;
 			boolean is0xAE = data==DATA_END;
-			if(data==(byte)0x68){
-				isHeartPackage = false;
-				indexPackageType = packageCount.get();
-			}
 			if(isReady && is0xA5) {//数据开头
 				checkDataAndReset(baos);
 				isReady = false;
@@ -88,49 +74,20 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 				isReady = true;
 				//完成数据读取...
 				byte[] datas = baos.toByteArray();
-				if(isHeartPackage){
-					System.out.println("心跳数据包...");
-					cardDeviceId = Arrays.copyOfRange(datas,1,datas.length-2);
-					controlCardId = new String(cardDeviceId);
-					System.out.println("controlCardId "+controlCardId);
-				}else{
-					System.out.println("不是心跳数据包...");
-					DebugUtils.debugData("decoder", datas);
-					String hexDump = ByteBufUtil.hexDump(datas);
-					System.out.println(hexDump);
-					if(indexPackageType!=-1) {
-						cardDeviceId= Arrays.copyOfRange(datas, 1, indexPackageType - 1);
-						controlCardId = new String(cardDeviceId);
-						System.out.println("controlCardId " + controlCardId);
-						byte[] crcData = Arrays.copyOfRange(datas,indexPackageType-1,datas.length-3);
-						//計算crc
-						int crcNumber = PackDataUtils.calculationCRC(crcData);
-						byte[] crcs = PackDataUtils.intToByteArray(crcNumber);
-						System.out.println(crcs[0]+" "+crcs[1]+" "+PackDataUtils.binaryToHexString(crcs));
-						int cVal = CRC16.Pub_CalcCRC(crcData,crcData.length);
-						System.out.println(cVal+" "+crcNumber+" "+CRC16.getCRC16(crcData));
-					}
-				}
-
+				DebugUtils.debugData("decoder", datas);
+				String hexDump = ByteBufUtil.hexDump(datas);
+				System.out.println(hexDump);
+				System.out.println("hexDump:"+hexDump.length());
 				AbstractCommand cmd = PackDataUtils.binaryTransCmd(datas);
 				if(null!=cmd) { //写数据
 					cmd.setDataBinary(datas);
 					out.add(cmd);
 				}else{
 					out.add(datas);
-					byte[] openCmd = PackDataUtils.packOpenCmdByCardDeviceId(cardDeviceId);
-					//out.add(openCmd);
-					byte[] closeCmd = PackDataUtils.packCloseCmdByCardDeviceId(cardDeviceId);
-					//out.add(closeCmd);
-
-					closeCmd = PackDataUtils.packRestartAppCmdByCardDeviceId(cardDeviceId);
-					//out.add(closeCmd);
-
-					closeCmd = PackDataUtils.packRestartHardWareCmdByCardDeviceId(cardDeviceId);
-					//out.add(closeCmd);
 				}
 				//完整的数据包...
-				reset();
+				previousData = -1;
+				baos.reset();//重置...
 			}else {
 				checkDataAndReset(baos);
 				transCoding(in, data,baos);//转码...
@@ -146,19 +103,7 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 	}
 	
 	public boolean validateHead(ByteArrayOutputStream baos){
-		int size = baos.size();
-		return MAX_HEADER_SIZE <= size;
-	}
-
-	/**
-	 * 重置
-	 */
-	public void reset(){
-		previousData = -1;
-		indexPackageType = -1;
-		baos.reset();//重置...
-		isHeartPackage = true; //还原标识信息,假设是心跳包...
-		packageCount.set(0);
+		return MAX_HEADER_SIZE <= baos.size();
 	}
 	
 	/**
@@ -176,11 +121,25 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 	 * @return
 	 */
 	protected int transCoding(ByteBuf in,byte data,ByteArrayOutputStream baos) {
+		return transCoding(in,data,false,baos);
+	}
+	
+	/**
+	 * 转码
+	 *  0x54 0x01 -> 0x55
+	 *	0x54 0x02 -> 0x54 
+	 * <B>方法名称：</B><BR>
+	 * <B>概要说明：</B><BR>
+	 * @param in
+	 * @param data
+	 * @param isTransCode 是否需要转码
+	 * @return
+	 */
+	protected int transCoding(ByteBuf in,byte data,boolean isTransCode,ByteArrayOutputStream baos) {
 		if(DATA_NEED==data || previousData==DATA_NEED) {//转码
 			logger.info("转码");
 			if(in.isReadable()) {
 				byte dataNext = in.readByte();
-				packageCount.incrementAndGet();
 				if (DATA_CONVERT_0X05 == dataNext) {
 					baos.write(0xa5);
 				}else if (DATA_CONVERT_0X0E == dataNext) {
@@ -190,6 +149,12 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 				}else{
 					baos.write(data);
 					baos.write(dataNext);
+					if((byte)0x68==dataNext) {//数据协议开始
+						byte[] binary = baos.toByteArray();
+						byte[] binaryCard = Arrays.copyOfRange(binary,1,binary.length-1);
+						controlCardId = new String(binaryCard);
+						System.out.println("controlCardId "+controlCardId);
+					}
 				}
 			}else { //channel无最新数据,数据粘包
 				System.out.println("channel无最新数据,数据粘包");
@@ -197,11 +162,18 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 				baos.write(data);
 			}
 		}else{
-			baos.write(data);
+			if((byte)0x68==data){//数据协议开始
+				baos.write(0x68);
+				byte[] binary = baos.toByteArray();
+				byte[] binaryCard = Arrays.copyOfRange(binary,1,binary.length-1);
+				controlCardId = new String(binaryCard);
+				System.out.println("controlCardId "+controlCardId);
+			}else {
+				baos.write(data);
+			}
 		}
 		return data;
 	}
-
 
 
 

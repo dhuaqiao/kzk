@@ -3,13 +3,12 @@ package com.led.netty.utils;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import io.netty.buffer.ByteBuf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,10 +23,15 @@ public class PackDataUtils {
 	private static final Logger logger = LoggerFactory.getLogger(PackDataUtils.class);
 	private static final Charset GB18030 = Charset.forName("GB18030");
 	private static Map<Integer, Integer> fontSizeMap = new HashMap<Integer, Integer>();
-	//open cmd
-	public static byte[] PACKAGE_OPEN_CMD  = {(byte) 0xA5, 0x68, 0x32, 0x01, 0x76, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x13, 0x01, (byte) 0xAE};
-	//close cmd
-	public static byte[] PACKAGE_CLOSE_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, 0x76, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x12, 0x01, (byte) 0xAE};
+
+	//open cmd 立即开屏 A5 68 32 01 76 01 00 01 00 00 00 00 00 00 00 13 01 AE
+	public static byte[] PACKAGE_OPEN_CMD  = {(byte) 0xA5, 0x68, 0x32, 0x01, 0x76, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x13, 0x01, (byte) 0xAE};
+	//close cmd 立即关屏
+	public static byte[] PACKAGE_CLOSE_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, 0x76, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x12, 0x01, (byte) 0xAE};
+	//restart app APP重启
+	public static byte[] PACKAGE_RESTART_APP_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, (byte)0xFE, 0x01, 0x41, 0x50, 0x50, 0x21, (byte)0x9C, 0x02, (byte) 0xAE};
+	//restart hardware 硬件重启屏
+	public static byte[] PACKAGE_RESTART_HARDWARE_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, (byte)0x2D, 0x01, 0x00, (byte)0xC9, 0x00, (byte) 0xAE};
 
 	//初始化字
 	static {
@@ -39,6 +43,71 @@ public class PackDataUtils {
 		fontSizeMap.put(Integer.valueOf(5), Integer.valueOf(40));
 		fontSizeMap.put(Integer.valueOf(6), Integer.valueOf(48));
 		fontSizeMap.put(Integer.valueOf(7), Integer.valueOf(56));
+	}
+
+	/**
+	 * 根据控制卡设备ID 生成开启屏幕指令
+	 * @param deviceId
+	 * @return
+	 */
+	public static byte[] packOpenCmdByCardDeviceId(byte[] cardDeviceId){
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream(cardDeviceId.length+PACKAGE_OPEN_CMD.length)){
+			bos.write(0xA5);
+			bos.write(cardDeviceId);
+			bos.write(PACKAGE_OPEN_CMD,1,PACKAGE_OPEN_CMD.length-1);
+			return bos.toByteArray();
+		} catch (Exception e) {
+			return PACKAGE_OPEN_CMD;
+		}
+	}
+
+	/**
+	 * 根据控制卡设备ID 生成关闭屏幕指令
+	 * @param cardDeviceId
+	 * @return
+	 */
+	public static byte[] packCloseCmdByCardDeviceId(byte[] cardDeviceId){
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
+			bos.write(0xA5);
+			bos.write(cardDeviceId);
+			bos.write(PACKAGE_CLOSE_CMD,1,PACKAGE_CLOSE_CMD.length-1);
+			return bos.toByteArray();
+		} catch (Exception e) {
+			return PACKAGE_CLOSE_CMD;
+		}
+	}
+
+	/**
+	 * 根据控制卡设备ID 生成关闭屏幕指令
+	 * @param cardDeviceId
+	 * @return
+	 */
+	public static byte[] packRestartAppCmdByCardDeviceId(byte[] cardDeviceId){
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
+			bos.write(0xA5);
+			bos.write(cardDeviceId);
+			bos.write(PACKAGE_RESTART_APP_CMD,1,PACKAGE_RESTART_APP_CMD.length-1);
+			return bos.toByteArray();
+		} catch (Exception e) {
+			return PACKAGE_RESTART_APP_CMD;
+		}
+	}
+
+
+	/**
+	 * 根据控制卡设备ID 生成关闭屏幕指令
+	 * @param cardDeviceId
+	 * @return
+	 */
+	public static byte[] packRestartHardWareCmdByCardDeviceId(byte[] cardDeviceId){
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
+			bos.write(0xA5);
+			bos.write(cardDeviceId);
+			bos.write(PACKAGE_RESTART_HARDWARE_CMD,1,PACKAGE_RESTART_HARDWARE_CMD.length-1);
+			return bos.toByteArray();
+		} catch (Exception e) {
+			return PACKAGE_RESTART_HARDWARE_CMD;
+		}
 	}
 
 	/**
@@ -170,8 +239,7 @@ public class PackDataUtils {
 	public static int calculationCRC(byte[] data) {
 		int total = 0;
 		for (int d : data) {
-			if (d < 0)
-				total += 256;
+			if (d < 0) total += 256; //转换为正数
 			total += d;
 		}
 		return total;
@@ -190,6 +258,28 @@ public class PackDataUtils {
 		b[2] = (byte) (n >> 16 & 0xff);
 		b[3] = (byte) (n >> 24 & 0xff);
 		return b;
+	}
+
+	public static String byteToHexString(byte b){
+		String s = Integer.toHexString(b & 0xFF);
+		if (s.length() == 1){
+			return "0" + s;
+		}else{
+			return s;
+		}
+	}
+
+	/**
+	 * 数组转成十六进制字符串
+	 * @param byte[]
+	 * @return HexString
+	 */
+	public static String binaryToHexString(byte[] b){
+		StringBuffer buffer = new StringBuffer();
+		for (int i = 0; i < b.length; ++i){
+			buffer.append(byteToHexString(b[i]));
+		}
+		return buffer.toString();
 	}
 
 	public static AbstractCommand binaryTransCmd(byte[] datas) {
