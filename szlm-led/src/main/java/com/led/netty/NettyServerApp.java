@@ -26,6 +26,8 @@ public class NettyServerApp {
 		*/
 		// A5 33 39 34 36 31 32 01 AE 心跳数据
 		// A5 33 39 34 36 31 32 91 AE 回复心跳
+		byte[] data = {0x32, 0x00, 0x39, 0x32, 0x00, 0x39};
+		System.out.println(new String(data));
 		SpringApplication app = new SpringApplication(NettyServerInitializer.class);
 		app.setWebApplicationType(WebApplicationType.NONE);
 		app.setRegisterShutdownHook(true);

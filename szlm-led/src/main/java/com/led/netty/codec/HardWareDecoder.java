@@ -2,8 +2,6 @@ package com.led.netty.codec;
 
 
 import com.led.netty.pojo.AbstractCommand;
-import com.led.netty.utils.CRC16;
-import com.led.netty.utils.DebugUtils;
 import com.led.netty.utils.IOUtils;
 import com.led.netty.utils.PackDataUtils;
 import io.netty.buffer.ByteBuf;
@@ -18,6 +16,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
@@ -38,8 +37,9 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 	private boolean isReady = true;
 	//数据包存放区域...
     private ByteArrayOutputStream baos = new ByteArrayOutputStream();
-	//前一个数据
-    private byte previousData = -1;
+	//转义字节
+    private volatile AtomicBoolean escapeByte = new AtomicBoolean(false);
+
 	//计数,计算包类型出现的位置...
 	private AtomicInteger packageCount = new AtomicInteger();
 	//包类型出现位置
@@ -64,25 +64,81 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 	//区分当前是心跳包还是正常数据包,默认是心跳包......
 	private volatile boolean isHeartPackage = true;
 
-
-	@Override
 	protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+
+		//decodeReadByString(ctx,in,out);
+
+		decodeByByteRead(ctx,in,out);
+	}
+
+	/**
+	 * 先读然后在进行数据转义
+	 * @param ctx
+	 * @param in
+	 * @param out
+	 * @throws Exception
+	 */
+	protected void decodeReadByString(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+		while (in.isReadable()) {
+			byte data = in.readByte();
+			baos.write(data);
+			boolean is0xA5 = data == DATA_BEGIN;
+			boolean is0xAE = data == DATA_END;
+			if(isReady && is0xA5) {//数据开头
+				System.out.println("数据开头");
+				checkDataAndReset(baos);
+				isReady = false;
+			}else if(is0xAE) {//数据结尾
+				System.out.println("数据结尾");
+				checkDataAndReset(baos);
+				isReady = true;
+				//完成数据读取...
+				byte[] datas = baos.toByteArray();
+				baos.reset();//重置数据,可能是无效的数据
+				StringBuilder _builder = new StringBuilder();
+				String msg = ByteBufUtil.hexDump(datas).toUpperCase();
+				for(int i =0;i<msg.length();i++){
+					if(i%2==0) _builder.append(" ");
+					_builder.append(msg.charAt(i));
+				}
+				System.out.println("原始网络数据:"+_builder);
+				out.add(datas);
+				//转换 AA05 AA0E AA0A
+				msg = msg.replaceAll("AA05","A5").replaceAll("AA0E","AE").replaceAll("AA0A","AA");
+				System.out.println("转义之后数据:"+msg);
+				byte[] zhDatas = msg.getBytes();
+				out.add(datas);
+			}
+		}
+	}
+
+	/**
+	 * RS232/RS485返回数据包
+	 *
+	 * @param ctx
+	 * @param in
+	 * @param out
+	 * @throws Exception
+	 */
+	protected void decodeByByteRead(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
 		while(in.isReadable()) {
 			byte data = in.readByte();
 			packageCount.incrementAndGet();
 			//System.out.println(Integer.toHexString(data) +" "+data);
 			boolean is0xA5 = data==DATA_BEGIN;
 			boolean is0xAE = data==DATA_END;
-			if(data==(byte)0x68){
+			if(data==(byte)0xE8 || data==(byte)0x68){ // 0xE8 0x68
 				isHeartPackage = false;
 				indexPackageType = packageCount.get();
 			}
 			if(isReady && is0xA5) {//数据开头
+				System.out.println("数据开头");
 				checkDataAndReset(baos);
 				isReady = false;
 				baos.reset();//重置数据,可能是无效的数据
 				baos.write(data);
 			}else if(is0xAE) {//数据结尾
+				System.out.println("数据结尾");
 				checkDataAndReset(baos);
 				baos.write(data);
 				isReady = true;
@@ -95,9 +151,10 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 					System.out.println("controlCardId "+controlCardId);
 				}else{
 					System.out.println("不是心跳数据包...");
-					DebugUtils.debugData("decoder", datas);
+					//DebugUtils.debugData("decoder", datas);
 					String hexDump = ByteBufUtil.hexDump(datas);
-					System.out.println(hexDump);
+					//System.out.println(hexDump);
+					logger.info("收到完整数据包...{}",hexDump);
 					if(indexPackageType!=-1) {
 						cardDeviceId= Arrays.copyOfRange(datas, 1, indexPackageType - 1);
 						controlCardId = new String(cardDeviceId);
@@ -107,8 +164,6 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 						int crcNumber = PackDataUtils.calculationCRC(crcData);
 						byte[] crcs = PackDataUtils.intToByteArray(crcNumber);
 						System.out.println(crcs[0]+" "+crcs[1]+" "+PackDataUtils.binaryToHexString(crcs));
-						int cVal = CRC16.Pub_CalcCRC(crcData,crcData.length);
-						System.out.println(cVal+" "+crcNumber+" "+CRC16.getCRC16(crcData));
 					}
 				}
 
@@ -154,7 +209,6 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 	 * 重置
 	 */
 	public void reset(){
-		previousData = -1;
 		indexPackageType = -1;
 		baos.reset();//重置...
 		isHeartPackage = true; //还原标识信息,假设是心跳包...
@@ -163,11 +217,13 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 	
 	/**
 	 * 转码
-	 *  0x54 0x01 -> 0x55
-	 *	0x54 0x02 -> 0x54
-	 * 0xaa 0x05 ->  0xa5
-	 * 0xaa 0x0e ->  0xae
-	 * 0xaa 0x0a ->  0xaa
+	 接收：
+	 接收到符号0xa5，表示一个包的开始
+	 接收到符号0xae，表示一个包的结束
+	 在0xa5，0xae之间接收的数据，当接收到0xaa时，需要与其后的一个字节合成还原为转义前的字符。具体为：
+	 0xaa 0x05  0xa5
+	 0xaa 0x0e  0xae
+	 0xaa 0x0a  0xaa
 	 * <B>方法名称：</B><BR>
 	 * <B>概要说明：</B><BR>
 	 * @param in
@@ -176,25 +232,20 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 	 * @return
 	 */
 	protected int transCoding(ByteBuf in,byte data,ByteArrayOutputStream baos) {
-		if(DATA_NEED==data || previousData==DATA_NEED) {//转码
-			logger.info("转码");
+		if(DATA_NEED==data || escapeByte.get()) {//转码
+			logger.info("转码,hex:{}",Integer.toHexString(data));
 			if(in.isReadable()) {
-				byte dataNext = in.readByte();
-				packageCount.incrementAndGet();
-				if (DATA_CONVERT_0X05 == dataNext) {
-					baos.write(0xa5);
-				}else if (DATA_CONVERT_0X0E == dataNext) {
-					baos.write(0xae);
-				}else if (DATA_CONVERT_0X0A== dataNext) {
-					baos.write(0xaa);
-				}else{
-					baos.write(data);
-					baos.write(dataNext);
+				escapeByte.set(false);
+				if(DATA_NEED==data){
+					byte dataNext = in.readByte();
+					packageCount.incrementAndGet();
+					_doEscapeByte(dataNext,baos,false);
+					return data;
 				}
-			}else { //channel无最新数据,数据粘包
-				System.out.println("channel无最新数据,数据粘包");
-				previousData = data;
-				baos.write(data);
+				_doEscapeByte(data,baos,false);
+			}else {
+				escapeByte.set(true);
+				_doEscapeByte(data,baos,true);
 			}
 		}else{
 			baos.write(data);
@@ -202,7 +253,20 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 		return data;
 	}
 
-
+	public void _doEscapeByte(byte data,ByteArrayOutputStream baos,boolean isEscape){
+		if (DATA_CONVERT_0X05 == data) {
+			baos.write(0xa5);
+			escapeByte.set(false);
+		}else if (DATA_CONVERT_0X0E == data) {
+			baos.write(0xae);
+			escapeByte.set(false);
+		}else if (DATA_CONVERT_0X0A== data) {
+			baos.write(0xaa);
+			escapeByte.set(false);
+		}else{
+			if(!isEscape) baos.write(data);
+		}
+	}
 
 
 	@Override

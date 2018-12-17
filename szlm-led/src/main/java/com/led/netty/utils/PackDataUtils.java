@@ -45,6 +45,18 @@ public class PackDataUtils {
 		fontSizeMap.put(Integer.valueOf(7), Integer.valueOf(56));
 	}
 
+	//  A5 33 39 34 36 31 32 68 32 01 7b 01 0d 00 00 00 02 00 00 01 00 00 00 32 00 39 32 00 39 fd 01 AE
+    // 校验码等于包类型到包数据所有数据之和
+
+	public byte[] packSendTextToScreeCmd(byte[] cardDeviceId){
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
+
+		} catch (Exception e) {
+			return null;
+		}
+		return  null;
+	}
+
 	/**
 	 * 根据控制卡设备ID 生成开启屏幕指令
 	 * @param deviceId
