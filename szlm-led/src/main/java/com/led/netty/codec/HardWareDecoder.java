@@ -144,11 +144,15 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 				isReady = true;
 				//完成数据读取...
 				byte[] datas = baos.toByteArray();
+				//完整的数据包...
+				reset();
+				//数据业务处理
 				if(isHeartPackage){
 					System.out.println("心跳数据包...");
 					cardDeviceId = Arrays.copyOfRange(datas,1,datas.length-2);
 					controlCardId = new String(cardDeviceId);
 					System.out.println("controlCardId "+controlCardId);
+					_test01(out);
 				}else{
 					System.out.println("不是心跳数据包...");
 					//DebugUtils.debugData("decoder", datas);
@@ -164,6 +168,8 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 						int crcNumber = PackDataUtils.calculationCRC(crcData);
 						byte[] crcs = PackDataUtils.intToByteArray(crcNumber);
 						System.out.println(crcs[0]+" "+crcs[1]+" "+PackDataUtils.binaryToHexString(crcs));
+						_test01(out);
+
 					}
 				}
 
@@ -172,7 +178,7 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 					cmd.setDataBinary(datas);
 					out.add(cmd);
 				}else{
-					out.add(datas);
+					//out.add(datas);
 					byte[] openCmd = PackDataUtils.packOpenCmdByCardDeviceId(cardDeviceId);
 					//out.add(openCmd);
 					byte[] closeCmd = PackDataUtils.packCloseCmdByCardDeviceId(cardDeviceId);
@@ -183,14 +189,28 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 
 					closeCmd = PackDataUtils.packRestartHardWareCmdByCardDeviceId(cardDeviceId);
 					//out.add(closeCmd);
+
+					//
 				}
-				//完整的数据包...
-				reset();
+
 			}else {
 				checkDataAndReset(baos);
 				transCoding(in, data,baos);//转码...
 			}
 		}
+	}
+
+	public void _test01(List<Object> out){
+		List<byte[]> packageDatas = PackDataUtils._packData();
+		System.out.println("packageDatas "+packageDatas.size());
+		packageDatas.forEach(packageData->{
+			out.add(packageData);
+			try {
+				Thread.sleep(500);
+			}catch (Exception e){
+				e.printStackTrace();
+			}
+		});
 	}
 
 	public void checkDataAndReset(ByteArrayOutputStream baos){

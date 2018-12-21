@@ -1,21 +1,16 @@
 package com.led.netty.utils;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
-import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-import io.netty.buffer.ByteBuf;
+import com.led.netty.pojo.AbstractCommand;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.led.netty.pojo.AbstractCommand;
-import com.led.netty.pojo.HeartBeatCommand;
-import com.led.netty.pojo.LoginCommand;
-import com.led.netty.pojo.SetUpTimeCommand;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.Charset;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 //重启硬件、重启软件、清屏、读取目前节目、发送节目（向左滚动、向上滚动）、删除某个界面、注册、心跳
 public class PackDataUtils {
@@ -32,6 +27,8 @@ public class PackDataUtils {
 	public static byte[] PACKAGE_RESTART_APP_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, (byte)0xFE, 0x01, 0x41, 0x50, 0x50, 0x21, (byte)0x9C, 0x02, (byte) 0xAE};
 	//restart hardware 硬件重启屏
 	public static byte[] PACKAGE_RESTART_HARDWARE_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, (byte)0x2D, 0x01, 0x00, (byte)0xC9, 0x00, (byte) 0xAE};
+	//模版控制方法
+	public static byte[] PACKAGE_TEMPLDATE_CMD = { (byte) 0xA5, 0x68, 0x32, 0x01, 0x7B, 0x01, 0x02, 0x00, 0x00, 0x00, (byte) 0x82, 0x11, (byte) 0xAC, 0x01, (byte) 0xAE };
 
 	//初始化字
 	static {
@@ -124,7 +121,7 @@ public class PackDataUtils {
 
 	/**
 	 * 設置屏幕亮度
-	 * @param lightnessNumber
+	 * @param lightnessNumber lightnessNumber 参数 0-31
 	 * @return
 	 */
 	public static byte[] packConfigLightness(int lightnessNumber) {
@@ -164,10 +161,24 @@ public class PackDataUtils {
 	 * @param height
 	 * @return
 	 */
-	public synchronized static byte[] setTemplate(int width,int height){
+	public static byte[] setTemplate(int width,int height){
+		return setTemplate(width, height,null);
+	}
+	/**
+	 * 设置模版方式
+	 * @param width 宽度
+	 * @param height 高度
+	 * @param cardDeviceId 控制卡id
+	 * @return
+	 */
+	public static byte[] setTemplate(int width,int height,byte[] cardDeviceId){
 		try(ByteArrayOutputStream bos = new ByteArrayOutputStream()){
 			//固定字符
 			bos.write(0xA5);
+			//设置控制卡id
+			if(Objects.nonNull(cardDeviceId)){
+				bos.write(cardDeviceId);
+			}
 			bos.write(0x68);
 			bos.write(0x32);
 			bos.write(0x01);
@@ -223,7 +234,6 @@ public class PackDataUtils {
 			bos.write(0x00);//停留时间
 			bos.write(0x03 );//停留时间
 			bos.write(0x00 );//对其方式
-			bos.flush();
 			byte[] cd =  bos.toByteArray();
 			byte[] jym = new byte[cd.length - 1];// 校验码
 			System.arraycopy(cd, 1, jym, 0, jym.length);
@@ -238,10 +248,331 @@ public class PackDataUtils {
 			return destData;
 		} catch (Exception e) {
 			return null;
-		}finally{
 		}
 	}
 
+	/**
+	 *
+	 * 进入节目模板方式
+	 * @return
+	 */
+	public static byte[] stepIntoTemplate(byte[] cardDeviceId) {
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
+			bos.write(0xA5);
+			bos.write(cardDeviceId);
+			bos.write(PACKAGE_TEMPLDATE_CMD,1,PACKAGE_TEMPLDATE_CMD.length-1);
+			return bos.toByteArray();
+		} catch (Exception e) {
+			return PACKAGE_TEMPLDATE_CMD;
+		}
+	}
+
+	/**
+	 * 进入节目模板方式
+	 * @return
+	 */
+	public static byte[] stepIntoTemplate() {
+		return PACKAGE_TEMPLDATE_CMD;
+	}
+
+
+	/**
+	 * 组装流明控制卡数据包
+	 * 分多包的数据情况
+	 * @param info
+	 * @return
+	 */
+	public static List<byte[]> _packData() {
+		/**0x00: 立即显示
+		 0x01: 从左边展开
+		 0x02: 从左边展开
+		 0x03: 从中间向两边展开
+		 0x04: 从中间向上下展开
+		 0x05: 分段展开
+		 0x06: 向左边移出
+		 0x07: 向右边移出
+		 0x08: 向上边移出
+		 0x09: 向下边移出
+		 0x0A: 向上滚动
+		 0x0B: 向左滚动
+		 0x0C: 向右滚动*/
+		//组装相关的指令信息 相关的逻辑判断
+		int width=128;
+		int height=48;
+		int xh=1;//节目序号
+		byte font = 24;// 文字大小 16号2,24号3,32号4
+		int time = 3;//停留时间?
+		byte sd = 3;// 速度 1～100 1 数值越小，速度越快 1:最快2:快速3:中速4:慢速5:最慢
+		switch(sd){
+			case 1:
+				sd =0;//最快
+				break;
+			case 2:
+				sd = 3;//快速
+				break;
+			case 3:
+				sd = 10;//中速
+				break;
+			case 4:
+				sd = 50;//慢速
+				break;
+			case 5:
+				sd = 100;//最慢
+				break;
+			default:
+				sd = 0;//立即打出
+				break;
+		}
+		byte hy=1;//显示花样 1:左移2:右移3:上移4:下移5:立即打出
+		switch(hy){
+			case 1:
+				hy =0x06;//左移
+				break;
+			case 2:
+				hy = 0x07;//右移
+				break;
+			case 3:
+				hy = 0x08;//上移
+				break;
+			case 4:
+				hy = 0x09;//下移
+				break;
+			case 5:
+				hy = 0;//立即打出
+				break;
+			default:
+				hy = 0;//立即打出
+				break;
+		}
+		//hy = 63;
+		String title = "title";
+		String content = "getContent";
+		String inscribed = "getInscribed";
+		for (int i = 1; i <= 10; i++) {
+			title += "title>" + i;
+			content += "content >" + i;
+			inscribed += "content" + i;
+		}
+		return packDataByMany(width, height, xh, font, time, sd, hy, title, content, inscribed);
+	}
+
+
+	/**
+	 * 组装数据包
+	 * 分多包的数据情况
+	 *
+	 * @param width
+	 *            宽度
+	 * @param height
+	 *            高度
+	 * @param xh
+	 *            序号
+	 * @param font
+	 *            字体
+	 * @param time
+	 *            时间
+	 * @param sd
+	 *            速度
+	 * @param hy
+	 *            花样
+	 * @param title
+	 *            标题
+	 * @param content
+	 *            内容
+	 * @param inscribed
+	 *            落款
+	 * @return
+	 */
+
+	public static List<byte[]> packDataByMany(int width, int height, int xh,byte font, int time, byte sd, byte hy, String title,String content, String inscribed) {
+		logger.info(("设备宽度：{} 设备高度：{} 节目序号为：{}"), new Object[] { width, height, xh });
+		Charset GB18030 = Charset.forName("GB18030");
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
+			StringBuilder sbuilderInfo = new StringBuilder();
+			if(title!=null && !"".equals(title.trim())){
+				int fontSize = 16;
+				switch(font){
+					case 2:
+						fontSize = 16;
+						break;
+					case 3:
+						fontSize = 24;
+						break;
+					case 4:
+						fontSize = 32;
+						break;
+					case 5:
+						fontSize = 40;
+						break;
+					case 6:
+						fontSize = 48;
+						break;
+					case 7:
+						fontSize = 56;
+						break;
+				}
+				int maxFontSize = width / fontSize;// 一行最多显示的字数
+				int titleFontSize = title.length();// 标题的长度
+				int countFonts = maxFontSize - titleFontSize;// 添加空格数
+				countFonts = countFonts > 0 ? countFonts==1 ? 1 : countFonts / 2 : 0;// 标题添加多少空格
+				boolean isZc = maxFontSize%2==0;
+				for (int count = 0; count < countFonts; count++) {
+					if(isZc){
+						sbuilderInfo.append("  ");
+					}else{
+						sbuilderInfo.append(" ");
+					}
+				}
+				sbuilderInfo.append(title).append("\r\n");//添加标题
+			}
+			if(content!=null && !"".equals(content.trim())){
+				sbuilderInfo.append(content);//添加内容
+			}
+			if(inscribed!=null && !"".equals(inscribed.trim())){//添加4个空格
+				sbuilderInfo.append(inscribed);//落款
+			}
+			System.out.println("完整信息:"+sbuilderInfo);
+			/**
+			 * 开始分包
+			 */
+			bos.write(0x88);// CC 0x88 发送独立节目
+			bos.write(0x00);// 用户附加码，固定
+			bos.write(0x00);// 用户附加码，固定
+			bos.write(0x00);// 用户附加码，固定
+			bos.write(0x01);// 用户附加码，固定
+			bos.write(xh);// 节目序号<!--序号----->
+			bos.write(0x00);// 控制属性，固定
+			bos.write(0x00);// 保留，固定
+			bos.write(0x00);// 保留，固定
+			bos.write(0x00);// 保留，固定
+			bos.write(0x01);// 窗口数据，这里只分一个窗口，固定
+			//窗口信息表数据
+			//附录1：窗口位置及属性
+			//窗口起点X。高字节在前
+			bos.write(0x00);// 窗口起始坐标点，固定
+			bos.write(0x00);// 窗口起始坐标点，固定
+			//窗口起点Y。高字节在前
+			bos.write(0x00);// 窗口起始坐标点，固定
+			bos.write(0x00);// 窗口起始坐标点，固定
+			//加入其他
+			byte kd_size[] = intToByteArray(width); // 宽度
+			//窗口宽度。高字节在前
+			bos.write(kd_size[1]);
+			bos.write(kd_size[0]);
+			byte gd_size[] = intToByteArray(height);// 高度
+			//窗口高度。高字节在前
+			bos.write(gd_size[1]);
+			bos.write(gd_size[0]);
+			//窗口缺省类型以及参数
+			bos.write(0x01);// 代表数据是文本类型，固定
+			bos.write(hy); // 特效，显示方式
+			bos.write(font); // 文字大小
+			bos.write(0x01);// 文字颜色，固定
+			bos.write(sd); // 速度
+			bos.write(0x00);// 00 03 停留时间/滚动重复
+			bos.write(0x03);// 00 03 停留时间/滚动重复
+			bos.write(0x00);//对齐方式
+			//17~19字节为窗口数据偏移，20~22字节为窗口数据长度。高字节在前。无数据则偏移和长度均为0.
+			//窗口数据偏移
+			bos.write(0x00);// 窗口偏移，固定
+			bos.write(0x00);// 窗口偏移，固定
+			bos.write(0x00);// 窗口偏移，固定
+			List<byte[]> packList = new CopyOnWriteArrayList<byte[]>();
+			//定义包的大小
+			//int sizeData = 800;
+			int sizeData = 300;
+			//sizeData = 200;
+			//11+22*1 = 33
+			//数据区域长度
+			//窗口数据长度
+			byte[] msgDataInfo = sbuilderInfo.toString().getBytes(GB18030);
+			byte wznr_length[] = intToByteArray(msgDataInfo.length);
+			bos.write(wznr_length[2]);
+			bos.write(wznr_length[1]);
+			bos.write(wznr_length[0]);
+			//写入固定数据
+			//窗口数据		变长	窗口要播放的数据，如“文本”、“图片”等。第1字节：数据类型(1文本；4图片)第2字节：数据格式（同发文本或发图片的定义）第3字节起：文本或图片数据。
+			bos.write(0x01);
+			bos.write(0x00);
+			byte[] commHeader = bos.toByteArray();//Header包
+			//内容...
+			int sizeCd = msgDataInfo.length + commHeader.length;//0x88开始的数据包
+			byte[] newMsgDataInfo =  new byte[sizeCd];
+			System.arraycopy(commHeader, 0, newMsgDataInfo, 0, commHeader.length);
+			System.arraycopy(msgDataInfo, 0, newMsgDataInfo, commHeader.length, msgDataInfo.length);
+			msgDataInfo = newMsgDataInfo;
+			int lastPack = sizeCd % sizeData;
+			int dsCount = lastPack == 0 ? sizeCd / sizeData : sizeCd / sizeData+ 1;
+			System.out.println("数据包数量: " + dsCount);
+			logger.info("数据包分包数量: {}",dsCount);
+			for (int i = 0; i < dsCount; i++) {
+				bos.reset();
+				bos.write(0xA5);
+				bos.write(0x68);
+				bos.write(0x32);
+				bos.write(0x01);
+				bos.write(0x7B);
+				bos.write(0x01);
+				//写固定长度数据 写入包的数据长度信息
+				if (i != dsCount - 1) {
+					byte[] tmp = intToByteArray(sizeData);
+					bos.write(tmp[0]);
+					bos.write(tmp[1]);
+				} else {
+					byte[] tmp = intToByteArray(lastPack);
+					bos.write(tmp[0]);
+					bos.write(tmp[1]);
+				}
+				//包序号PO
+				bos.write(i);
+				//最末包序号TP
+				bos.write(dsCount - 1);
+				byte[] jym = (byte[]) null;
+				if ((i != dsCount - 1) && (sizeCd >= sizeData)) {
+					jym = new byte[sizeData];
+				} else{
+					jym = new byte[lastPack];
+				}
+				System.arraycopy(msgDataInfo, i * sizeData, jym, 0, jym.length);
+				bos.write(jym);
+				byte[] arrayData = bos.toByteArray();
+				byte[] jymData = new byte[arrayData.length - 1];
+				System.arraycopy(arrayData, 1, jymData, 0, jymData.length);
+				int crc = calculationCRC(jymData);
+				byte[] data = intToByteArray(crc);
+				bos.write(data[0]);
+				bos.write(data[1]);
+				bos.write(0xae);
+				byte[] tmpArrays = bos.toByteArray();
+				bos.reset();
+				bos.write(0xa5);
+				// 0xa5  0xaa 0x05。目的是避免与起始符0xa5相同
+				// 0xae  0xaa 0x0e。目的是避免与结束符0xae相同。
+				// 0xaa  0xaa 0x0a。目的是避免与转义符0xaa相同。
+				for (int j = 1; j < tmpArrays.length - 1; j++) {
+					if (tmpArrays[j] == -91) {
+						bos.write(0xaa);
+						bos.write(0x05);
+					} else if (tmpArrays[j] == -82) {
+						bos.write(0xaa);
+						bos.write(0x0e);
+					} else if (tmpArrays[j] == -86) {
+						bos.write(0xaa);
+						bos.write(0x0a);
+					} else {
+						bos.write(tmpArrays[j]);
+					}
+				}
+				bos.write(0xae);
+				tmpArrays = bos.toByteArray();
+				packList.add(tmpArrays);
+			}
+			return packList;
+		} catch (Exception e) {
+			logger.error("组装数据包出错:{}", e);
+			return null;
+		}
+	}
 
 	/**
 	 * 根据长度得到数据效验码
