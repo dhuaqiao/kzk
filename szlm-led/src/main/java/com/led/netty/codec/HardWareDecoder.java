@@ -173,7 +173,7 @@ public class HardWareDecoder extends ByteToMessageDecoder implements java.io.Clo
 					}
 				}
 
-				AbstractCommand cmd = PackDataUtils.binaryTransCmd(datas);
+				AbstractCommand cmd = PackDataUtils.binaryTransCmd(datas,null);
 				if(null!=cmd) { //写数据
 					cmd.setDataBinary(datas);
 					out.add(cmd);

@@ -1,6 +1,7 @@
 package com.led.netty.utils;
 
 import com.led.netty.pojo.AbstractCommand;
+import io.netty.channel.socket.DatagramPacket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,6 +14,12 @@ import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 //重启硬件、重启软件、清屏、读取目前节目、发送节目（向左滚动、向上滚动）、删除某个界面、注册、心跳
+
+/**
+ * 设置32*256的模版命令
+ * A5 31 38 31 32 32 36 68 32 01 7B 01 28 00 00 00 81 01 00 20 01 00 01 00 00 03 00 00 01 00 00 00 47 00 00 00 00 00 00 00 00 00 00 00 00 20 01 00 01 00 00 01 00 00 03 00 54 02 AE
+ * a5 31 38 31 32 32 36 68 32 01 7b 01 28 00 00 00 81 01 00 20 01 00 01 00 00 03 00 00 01 00 00 00 47 00 00 00 00 00 00 00 00 00 00 00 00 20 01 00 01 00 00 01 00 00 03 00 54 02 ae
+ */
 public class PackDataUtils {
 
 	private static final Logger logger = LoggerFactory.getLogger(PackDataUtils.class);
@@ -27,6 +34,10 @@ public class PackDataUtils {
 	public static byte[] PACKAGE_RESTART_APP_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, (byte)0xFE, 0x01, 0x41, 0x50, 0x50, 0x21, (byte)0x9C, 0x02, (byte) 0xAE};
 	//restart hardware 硬件重启屏
 	public static byte[] PACKAGE_RESTART_HARDWARE_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, (byte)0x2D, 0x01, 0x00, (byte)0xC9, 0x00, (byte) 0xAE};
+	//clear cmd
+	public static byte[] PACKAGE_CLEAR_HARDWARE_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, 0x7B, 0x01, 0x04, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x22, 0x01 , (byte)0xAE};
+	//heart hardware 心跳回复包 A5  91 AE
+	public static byte[] PACKAGE_HEART_HARDWARE_CMD = {(byte) 0xA5, (byte)0x91, (byte) 0xAE};
 	//模版控制方法
 	public static byte[] PACKAGE_TEMPLDATE_CMD = { (byte) 0xA5, 0x68, 0x32, 0x01, 0x7B, 0x01, 0x02, 0x00, 0x00, 0x00, (byte) 0x82, 0x11, (byte) 0xAC, 0x01, (byte) 0xAE };
 
@@ -87,6 +98,22 @@ public class PackDataUtils {
 	}
 
 	/**
+	 * 根据控制卡设备ID 生成清除屏幕指令
+	 * @param cardDeviceId
+	 * @return
+	 */
+	public static byte[] packClearCmdByCardDeviceId(byte[] cardDeviceId){
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
+			bos.write(0xA5);
+			bos.write(cardDeviceId);
+			bos.write(PACKAGE_CLEAR_HARDWARE_CMD,1,PACKAGE_CLEAR_HARDWARE_CMD.length-1);
+			return bos.toByteArray();
+		} catch (Exception e) {
+			return PACKAGE_CLEAR_HARDWARE_CMD;
+		}
+	}
+
+	/**
 	 * 根据控制卡设备ID 生成关闭屏幕指令
 	 * @param cardDeviceId
 	 * @return
@@ -116,6 +143,39 @@ public class PackDataUtils {
 			return bos.toByteArray();
 		} catch (Exception e) {
 			return PACKAGE_RESTART_HARDWARE_CMD;
+		}
+	}
+
+	/**
+	 * 根据控制卡设备ID 生成心跳指令
+	 * @param cardDeviceId
+	 * @return
+	 */
+	public static byte[] packHeartHardWareCmdByCardDeviceId(byte[] cardDeviceId){
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
+			bos.write(0xA5);
+			bos.write(cardDeviceId);
+			bos.write(PACKAGE_HEART_HARDWARE_CMD,1,PACKAGE_HEART_HARDWARE_CMD.length-1);
+			return bos.toByteArray();
+		} catch (Exception e) {
+			return PACKAGE_RESTART_HARDWARE_CMD;
+		}
+	}
+
+	/**
+	 *  数据包加入设备标识
+	 * @param cardDeviceId
+	 * @param binary
+	 * @return
+	 */
+	public static byte[] packDataAddCardDeviceId(byte[] cardDeviceId,byte[] binary){
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
+			bos.write(0xA5);
+			bos.write(cardDeviceId);
+			bos.write(binary,1,binary.length-1);
+			return bos.toByteArray();
+		} catch (Exception e) {
+			return null;
 		}
 	}
 
@@ -235,8 +295,8 @@ public class PackDataUtils {
 			bos.write(0x03 );//停留时间
 			bos.write(0x00 );//对其方式
 			byte[] cd =  bos.toByteArray();
-			byte[] jym = new byte[cd.length - 1];// 校验码
-			System.arraycopy(cd, 1, jym, 0, jym.length);
+			byte[] jym = new byte[cd.length - 1-cardDeviceId.length];// 校验码
+			System.arraycopy(cd, 1+cardDeviceId.length, jym, 0, jym.length);
 			int crc = calculationCRC(jym);// 校验码
 			byte[] data = intToByteArray(crc);// 得到低位字节数组
 			//debugData("校验码", data);
@@ -373,7 +433,7 @@ public class PackDataUtils {
 	 *            时间
 	 * @param sd
 	 *            速度
-	 * @param hy
+	 * @param hy  0x06;//左移 0立即打出
 	 *            花样
 	 * @param title
 	 *            标题
@@ -384,7 +444,7 @@ public class PackDataUtils {
 	 * @return
 	 */
 
-	public static List<byte[]> packDataByMany(int width, int height, int xh,byte font, int time, byte sd, byte hy, String title,String content, String inscribed) {
+	public static List<byte[]> packDataByMany(int width, int height, int xh,int font, int time, int sd, int hy, String title,String content, String inscribed) {
 		logger.info(("设备宽度：{} 设备高度：{} 节目序号为：{}"), new Object[] { width, height, xh });
 		Charset GB18030 = Charset.forName("GB18030");
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
@@ -431,7 +491,7 @@ public class PackDataUtils {
 			if(inscribed!=null && !"".equals(inscribed.trim())){//添加4个空格
 				sbuilderInfo.append(inscribed);//落款
 			}
-			System.out.println("完整信息:"+sbuilderInfo);
+			//System.out.println("完整信息:"+sbuilderInfo);
 			/**
 			 * 开始分包
 			 */
@@ -494,6 +554,181 @@ public class PackDataUtils {
 			//窗口数据		变长	窗口要播放的数据，如“文本”、“图片”等。第1字节：数据类型(1文本；4图片)第2字节：数据格式（同发文本或发图片的定义）第3字节起：文本或图片数据。
 			bos.write(0x01);
 			bos.write(0x00);
+			byte[] commHeader = bos.toByteArray();//Header包
+			//内容...
+			int sizeCd = msgDataInfo.length + commHeader.length;//0x88开始的数据包
+			byte[] newMsgDataInfo =  new byte[sizeCd];
+			System.arraycopy(commHeader, 0, newMsgDataInfo, 0, commHeader.length);
+			System.arraycopy(msgDataInfo, 0, newMsgDataInfo, commHeader.length, msgDataInfo.length);
+			msgDataInfo = newMsgDataInfo;
+			int lastPack = sizeCd % sizeData;
+			int dsCount = lastPack == 0 ? sizeCd / sizeData : sizeCd / sizeData+ 1;
+			//System.out.println("数据包数量: " + dsCount);
+			logger.info("数据包分包数量: {}",dsCount);
+			for (int i = 0; i < dsCount; i++) {
+				bos.reset();
+				bos.write(0xA5);
+				bos.write(0x68);
+				bos.write(0x32);
+				bos.write(0x01);
+				bos.write(0x7B);
+				bos.write(0x01);
+				//写固定长度数据 写入包的数据长度信息
+				if (i != dsCount - 1) {
+					byte[] tmp = intToByteArray(sizeData);
+					bos.write(tmp[0]);
+					bos.write(tmp[1]);
+				} else {
+					byte[] tmp = intToByteArray(lastPack);
+					bos.write(tmp[0]);
+					bos.write(tmp[1]);
+				}
+				//包序号PO
+				bos.write(i);
+				//最末包序号TP
+				bos.write(dsCount - 1);
+				byte[] jym = (byte[]) null;
+				if ((i != dsCount - 1) && (sizeCd >= sizeData)) {
+					jym = new byte[sizeData];
+				} else{
+					jym = new byte[lastPack];
+				}
+				System.arraycopy(msgDataInfo, i * sizeData, jym, 0, jym.length);
+				bos.write(jym);
+				byte[] arrayData = bos.toByteArray();
+				byte[] jymData = new byte[arrayData.length - 1];
+				System.arraycopy(arrayData, 1, jymData, 0, jymData.length);
+				int crc = calculationCRC(jymData);
+				byte[] data = intToByteArray(crc);
+				bos.write(data[0]);
+				bos.write(data[1]);
+				bos.write(0xae);
+				byte[] tmpArrays = bos.toByteArray();
+				bos.reset();
+				bos.write(0xa5);
+				// 0xa5  0xaa 0x05。目的是避免与起始符0xa5相同
+				// 0xae  0xaa 0x0e。目的是避免与结束符0xae相同。
+				// 0xaa  0xaa 0x0a。目的是避免与转义符0xaa相同。
+				for (int j = 1; j < tmpArrays.length - 1; j++) {
+					if (tmpArrays[j] == -91) {
+						bos.write(0xaa);
+						bos.write(0x05);
+					} else if (tmpArrays[j] == -82) {
+						bos.write(0xaa);
+						bos.write(0x0e);
+					} else if (tmpArrays[j] == -86) {
+						bos.write(0xaa);
+						bos.write(0x0a);
+					} else {
+						bos.write(tmpArrays[j]);
+					}
+				}
+				bos.write(0xae);
+				tmpArrays = bos.toByteArray();
+				packList.add(tmpArrays);
+			}
+			return packList;
+		} catch (Exception e) {
+			logger.error("组装数据包出错:{}", e);
+			return null;
+		}
+	}
+
+	/**
+	 *
+	 * @param width
+	 * @param height
+	 * @param xh
+	 * @param font 4 32号字体
+	 * @param time
+	 * @param sd
+	 * @param hy
+	 * @param title
+	 * @param content
+	 * @param inscribed
+	 * @return
+	 */
+	public static List<byte[]> packData0x85(int width, int height, int xh,int font, int time, int sd, int hy, String title,String content, String inscribed) {
+		logger.info(("设备宽度：{} 设备高度：{} 节目序号为：{}"), new Object[] { width, height, xh });
+		Charset GB18030 = Charset.forName("GB18030");
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
+			StringBuilder sbuilderInfo = new StringBuilder();
+			if(title!=null && !"".equals(title.trim())){
+				int fontSize = 16;
+				switch(font){
+					case 2:
+						fontSize = 16;
+						break;
+					case 3:
+						fontSize = 24;
+						break;
+					case 4:
+						fontSize = 32;
+						break;
+					case 5:
+						fontSize = 40;
+						break;
+					case 6:
+						fontSize = 48;
+						break;
+					case 7:
+						fontSize = 56;
+						break;
+				}
+				int maxFontSize = width / fontSize;// 一行最多显示的字数
+				int titleFontSize = title.length();// 标题的长度
+				int countFonts = maxFontSize - titleFontSize;// 添加空格数
+				countFonts = countFonts > 0 ? countFonts==1 ? 1 : countFonts / 2 : 0;// 标题添加多少空格
+				boolean isZc = maxFontSize%2==0;
+				for (int count = 0; count < countFonts; count++) {
+					if(isZc){
+						sbuilderInfo.append("  ");
+					}else{
+						sbuilderInfo.append(" ");
+					}
+				}
+				sbuilderInfo.append(title).append("\r\n");//添加标题
+			}
+			if(content!=null && !"".equals(content.trim())){
+				sbuilderInfo.append(content);//添加内容
+			}
+			if(inscribed!=null && !"".equals(inscribed.trim())){//添加4个空格
+				sbuilderInfo.append(inscribed);//落款
+			}
+			System.out.println("完整信息:"+sbuilderInfo);
+			/**
+			 * 开始分包
+			 */
+			bos.write(0x85);// CC 0x85 发送独立节目
+			bos.write(0x00);// 用户附加码，固定
+			bos.write(0x00);// 用户附加码，固定
+			bos.write(0x00);// 用户附加码，固定
+			bos.write(0x01);// 用户附加码，固定
+			bos.write(xh);// 节目序号<!--序号----->
+			bos.write(0x00); //普通节目
+			/**
+			bos.write(0x01);// 窗口号
+			bos.write(0x01);// 控制属性，固定
+			//显示格式
+			bos.write(0x00);
+			bos.write(0x00);
+			bos.write(0x01);
+			bos.write(0x01);
+			bos.write(0x00);
+			bos.write(0x00);
+			bos.write(0x00);
+			bos.write(0x00);
+			 */
+			//内容
+			byte[] msgDataInfo = sbuilderInfo.toString().getBytes(GB18030);
+			bos.write(msgDataInfo);
+			bos.write(0x00);
+
+			List<byte[]> packList = new CopyOnWriteArrayList<byte[]>();
+			//定义包的大小
+			//int sizeData = 800;
+			int sizeData = 300;
+
 			byte[] commHeader = bos.toByteArray();//Header包
 			//内容...
 			int sizeCd = msgDataInfo.length + commHeader.length;//0x88开始的数据包
@@ -574,6 +809,125 @@ public class PackDataUtils {
 		}
 	}
 
+
+	public static byte[] pack0X85(String title){
+		try(ByteArrayOutputStream bos = new ByteArrayOutputStream();ByteArrayOutputStream bosCc = new ByteArrayOutputStream()){
+			//固定字符
+			bos.write(0xA5);
+			bos.write(0x68);
+			bos.write(0x32);
+			bos.write(0x01);
+			bos.write(0x7B);
+			bos.write(0x01);//1表示要接收返回值 0表示不要
+			//
+			//包数据长度LL LH	0x0000~0xffff	2	二字节的长度数，表示后面“CC。。。。。。”内容部分的长度，低字节在前
+			//包序号PO 	0x00~0x255	1	当包序号等于最末包序号时，表明这是最后一个包。
+			//最末包序号TP	0x00~0x255	1	总包数减去1。
+			//包数据	CC 。。。。。。	变长	协议命令和数据
+			//CC
+			bosCc.write(0x85);
+			//用户附加码
+			bosCc.write(0x00);
+			bosCc.write(0x00);
+			bosCc.write(0x00);
+			bosCc.write(0x01);
+			//节目号
+			bosCc.write(0x02);
+			//窗口号
+			bosCc.write(0x01);
+			//属性
+			bosCc.write(0x00);
+			//文字数据
+			//bosCc.write("hello_1".getBytes());
+			bosCc.write(title.getBytes());
+			bosCc.write(0x00);
+			byte[] textBinary = bosCc.toByteArray();
+
+			//写入内容
+			byte[] dataText = PackDataUtils.intToByteArray(textBinary.length); //得到低位字节数组
+			//包数据长度LL LH	0x0000~0xffff	2	二字节的长度数，表示后面“CC。。。。。。”内容部分的长度，低字节在前
+			//包序号PO 	0x00~0x255	1	当包序号等于最末包序号时，表明这是最后一个包。
+			//最末包序号TP	0x00~0x255	1	总包数减去1。
+			bos.write(dataText[0]);
+			bos.write(dataText[1]);
+			//包序号PO
+			bos.write(0x00);
+			//最末包序号TP
+			bos.write(0x00);
+			//内容
+			bos.write(textBinary);
+			/**
+			 数据项	数值	长度(字节)	意义描述
+			 CC	0x85	1	说明本数据包是发送文本
+			 用户附加码		4	用户给出的附加码。高字节在前
+			 节目号		1	有效值1～100
+			 窗口号		1	有效值1～10，超出节目模板定义时无效
+			 属性		1	Bit0~3: 文本类型
+			 0：普通文本
+			 1：格式文本
+			 Bit4: 显示格式。0缺省格式,1指定格式
+			 Bit5: 是否立即播放。（1立即播放）
+			 Bit6~7: 保留
+			 显示格式
+
+			 (注意：当”属性”的显示格式为0时不需要此项数据)	停留时间/滚动重复次数	2	停留时间/滚动重复次数。高字节在前。显示特效为“滚动”方式时表示滚动重复次数(0滚动1次，1滚动2次，…)，其它显示特效时是特效展示完之后的停留时间，单位是秒。
+			 速度	1	速度。该值越小，速度越快
+			 文字大小	1	Bit 0~3:文字大小。参见”文字大小编码”
+			 Bit 4~6:文字类型，参见文字类型编码
+			 文字颜色	1	文字颜色。参见单字节”文字颜色编码”
+			 显示特效	1	显示特效。参见”显示特效编码”
+			 对齐	1	文本的对齐方式、行间距
+			 Bit0~1: 水平对齐。0左，1中，2右
+			 Bit2~3: 垂直对齐。0上，1中，2下
+			 Bit4~7: 行间距0~15点
+			 保留	1	保留备用，填0
+			 文字数据		变长	文字数据根据文本类型不同而不同，文本类型见“属性”的定义。
+			 普通文本：
+			 文字串内容，以0x00结束。
+			 格式文本：
+			 第一字节是0x01,后面跟随的是Rich3文本，详细说明见格式化文本数据部分。
+			 */
+
+			bos.flush();
+			byte[] cd =  bos.toByteArray();
+			byte[] jym = new byte[cd.length - 1];// 校验码
+			System.arraycopy(cd, 1, jym, 0, jym.length);
+			int crc = PackDataUtils.calculationCRC(jym);// 校验码
+			byte[] data = PackDataUtils.intToByteArray(crc);// 得到低位字节数组
+			//debugData("校验码", data);
+			byte[] destData = new byte[cd.length + 3];
+			System.arraycopy(cd, 0, destData, 0, cd.length);
+			destData[destData.length - 3] = data[0];// 低位数值
+			destData[destData.length - 2] = data[1];// 高位
+			destData[destData.length - 1] = (byte) 0xAE;// 固定值
+
+			bos.reset();
+			bos.write(0xa5);
+			// 0xa5  0xaa 0x05。目的是避免与起始符0xa5相同
+			// 0xae  0xaa 0x0e。目的是避免与结束符0xae相同。
+			// 0xaa  0xaa 0x0a。目的是避免与转义符0xaa相同。
+			for (int j = 1; j < destData.length - 1; j++) {
+				if (destData[j] == -91) {
+					bos.write(0xaa);
+					bos.write(0x05);
+				} else if (destData[j] == -82) {
+					bos.write(0xaa);
+					bos.write(0x0e);
+				} else if (destData[j] == -86) {
+					bos.write(0xaa);
+					bos.write(0x0a);
+				} else {
+					bos.write(destData[j]);
+				}
+			}
+			bos.write(0xae);
+			destData = bos.toByteArray();
+			return destData;
+		}catch (Exception e){
+			return null;
+		}
+	}
+
 	/**
 	 * 根据长度得到数据效验码
 	 * @param data
@@ -604,7 +958,7 @@ public class PackDataUtils {
 	}
 
 	public static String byteToHexString(byte b){
-		String s = Integer.toHexString(b & 0xFF);
+		String s = Integer.toHexString(b & 0xFF).toUpperCase();
 		if (s.length() == 1){
 			return "0" + s;
 		}else{
@@ -620,12 +974,24 @@ public class PackDataUtils {
 	public static String binaryToHexString(byte[] b){
 		StringBuffer buffer = new StringBuffer();
 		for (int i = 0; i < b.length; ++i){
+			if(i%1==0)buffer.append(" ");
 			buffer.append(byteToHexString(b[i]));
 		}
 		return buffer.toString();
 	}
 
-	public static AbstractCommand binaryTransCmd(byte[] datas) {
-		return null;
+	public static AbstractCommand binaryTransCmd(byte[] datas,DatagramPacket datagramPacket) {
+		AbstractCommand cmd = new AbstractCommand();
+		cmd.setDataBinary(datas);
+		cmd.setDatagramPacket(datagramPacket);
+		return cmd;
+	}
+
+	public static AbstractCommand binaryTransCmd(byte[] datas,byte[] cardId,DatagramPacket datagramPacket) {
+		AbstractCommand cmd = new AbstractCommand();
+		cmd.setDataBinary(datas);
+		cmd.setDataCardId(cardId);
+		cmd.setDatagramPacket(datagramPacket);
+		return cmd;
 	}
 }

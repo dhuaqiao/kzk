@@ -109,7 +109,7 @@ public class HardWareDecoderOriginal extends ByteToMessageDecoder implements jav
 					}
 				}
 
-				AbstractCommand cmd = PackDataUtils.binaryTransCmd(datas);
+				AbstractCommand cmd = PackDataUtils.binaryTransCmd(datas,null);
 				if(null!=cmd) { //写数据
 					cmd.setDataBinary(datas);
 					out.add(cmd);

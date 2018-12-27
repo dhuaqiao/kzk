@@ -16,7 +16,7 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.net.ssl.SSLException;
 
-@SpringBootApplication(scanBasePackages = { "com.led.netty.config", "com.led.netty" })
+//@SpringBootApplication(scanBasePackages = { "com.led.netty.config", "com.led.netty" })
 public class NettyServerInitializer extends ChannelInitializer<SocketChannel> {
 
 	private static final Logger logger = LoggerFactory.getLogger(NettyServerConfig.class);
