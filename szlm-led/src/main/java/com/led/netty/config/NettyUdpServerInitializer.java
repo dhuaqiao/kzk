@@ -18,7 +18,7 @@ import javax.net.ssl.SSLException;
 @SpringBootApplication(scanBasePackages = { "com.led.netty.config", "com.led.netty" })
 public class NettyUdpServerInitializer extends ChannelInitializer<DatagramChannel> {
 
-	private static final Logger logger = LoggerFactory.getLogger(NettyServerConfig.class);
+	private static final Logger logger = LoggerFactory.getLogger(NettyUdpServerInitializer.class);
 
 	@Autowired
 	private NettyUdpServerConfig nettyUdpServerConfig;

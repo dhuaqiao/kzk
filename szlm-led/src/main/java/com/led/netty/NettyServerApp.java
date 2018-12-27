@@ -1,17 +1,8 @@
 package com.led.netty;
 
-import com.led.netty.config.NettyServerInitializer;
 import com.led.netty.config.NettyUdpServerInitializer;
-import com.led.netty.pojo.AbstractCommand;
-import com.led.netty.utils.PackDataUtils;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class NettyServerApp {
 
@@ -53,8 +44,6 @@ public class NettyServerApp {
 //		List<byte[]> items = PackDataUtils.packDataByMany(256,32,1,4,1,0,6,title,null,null);
 //		System.out.println(items.size());
 
-
-		System.out.println(PackDataUtils.binaryToHexString(PackDataUtils.intToByteArray(394612)));
 
 		/***/
 		SpringApplication app = new SpringApplication(NettyUdpServerInitializer.class);

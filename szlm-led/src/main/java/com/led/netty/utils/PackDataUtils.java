@@ -1,6 +1,6 @@
 package com.led.netty.utils;
 
-import com.led.netty.pojo.AbstractCommand;
+import com.led.netty.pojo.CommonCommand;
 import io.netty.channel.socket.DatagramPacket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,12 +13,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-//重启硬件、重启软件、清屏、读取目前节目、发送节目（向左滚动、向上滚动）、删除某个界面、注册、心跳
-
 /**
- * 设置32*256的模版命令
- * A5 31 38 31 32 32 36 68 32 01 7B 01 28 00 00 00 81 01 00 20 01 00 01 00 00 03 00 00 01 00 00 00 47 00 00 00 00 00 00 00 00 00 00 00 00 20 01 00 01 00 00 01 00 00 03 00 54 02 AE
- * a5 31 38 31 32 32 36 68 32 01 7b 01 28 00 00 00 81 01 00 20 01 00 01 00 00 03 00 00 01 00 00 00 47 00 00 00 00 00 00 00 00 00 00 00 00 20 01 00 01 00 00 01 00 00 03 00 54 02 ae
+ * Pack工具类
  */
 public class PackDataUtils {
 
@@ -27,19 +23,19 @@ public class PackDataUtils {
 	private static Map<Integer, Integer> fontSizeMap = new HashMap<Integer, Integer>();
 
 	//open cmd 立即开屏 A5 68 32 01 76 01 00 01 00 00 00 00 00 00 00 13 01 AE
-	public static byte[] PACKAGE_OPEN_CMD  = {(byte) 0xA5, 0x68, 0x32, 0x01, 0x76, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x13, 0x01, (byte) 0xAE};
+	public final static byte[] PACKAGE_OPEN_CMD  = {(byte) 0xA5, 0x68, 0x32, 0x01, 0x76, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x13, 0x01, (byte) 0xAE};
 	//close cmd 立即关屏
-	public static byte[] PACKAGE_CLOSE_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, 0x76, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x12, 0x01, (byte) 0xAE};
+	public final static byte[] PACKAGE_CLOSE_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, 0x76, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x12, 0x01, (byte) 0xAE};
 	//restart app APP重启
-	public static byte[] PACKAGE_RESTART_APP_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, (byte)0xFE, 0x01, 0x41, 0x50, 0x50, 0x21, (byte)0x9C, 0x02, (byte) 0xAE};
+	public final static byte[] PACKAGE_RESTART_APP_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, (byte)0xFE, 0x01, 0x41, 0x50, 0x50, 0x21, (byte)0x9C, 0x02, (byte) 0xAE};
 	//restart hardware 硬件重启屏
-	public static byte[] PACKAGE_RESTART_HARDWARE_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, (byte)0x2D, 0x01, 0x00, (byte)0xC9, 0x00, (byte) 0xAE};
+	public final static byte[] PACKAGE_RESTART_HARDWARE_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, (byte)0x2D, 0x01, 0x00, (byte)0xC9, 0x00, (byte) 0xAE};
 	//clear cmd
-	public static byte[] PACKAGE_CLEAR_HARDWARE_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, 0x7B, 0x01, 0x04, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x22, 0x01 , (byte)0xAE};
+	public final static byte[] PACKAGE_CLEAR_HARDWARE_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, 0x7B, 0x01, 0x04, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x22, 0x01 , (byte)0xAE};
 	//heart hardware 心跳回复包 A5  91 AE
-	public static byte[] PACKAGE_HEART_HARDWARE_CMD = {(byte) 0xA5, (byte)0x91, (byte) 0xAE};
+	public final static byte[] PACKAGE_HEART_HARDWARE_CMD = {(byte) 0xA5, (byte)0x91, (byte) 0xAE};
 	//模版控制方法
-	public static byte[] PACKAGE_TEMPLDATE_CMD = { (byte) 0xA5, 0x68, 0x32, 0x01, 0x7B, 0x01, 0x02, 0x00, 0x00, 0x00, (byte) 0x82, 0x11, (byte) 0xAC, 0x01, (byte) 0xAE };
+	public final static byte[] PACKAGE_TEMPLDATE_CMD = { (byte) 0xA5, 0x68, 0x32, 0x01, 0x7B, 0x01, 0x02, 0x00, 0x00, 0x00, (byte) 0x82, 0x11, (byte) 0xAC, 0x01, (byte) 0xAE };
 
 	//初始化字
 	static {
@@ -53,125 +49,140 @@ public class PackDataUtils {
 		fontSizeMap.put(Integer.valueOf(7), Integer.valueOf(56));
 	}
 
-	//  A5 33 39 34 36 31 32 68 32 01 7b 01 0d 00 00 00 02 00 00 01 00 00 00 32 00 39 32 00 39 fd 01 AE
-    // 校验码等于包类型到包数据所有数据之和
-
-	public byte[] packSendTextToScreeCmd(byte[] cardDeviceId){
-		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
-
-		} catch (Exception e) {
-			return null;
-		}
-		return  null;
-	}
-
 	/**
 	 * 根据控制卡设备ID 生成开启屏幕指令
-	 * @param deviceId
-	 * @return
+	 * @param deviceId 控制卡id
+	 * @return 生成开启屏幕指令
 	 */
 	public static byte[] packOpenCmdByCardDeviceId(byte[] cardDeviceId){
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream(cardDeviceId.length+PACKAGE_OPEN_CMD.length)){
 			bos.write(0xA5);
-			bos.write(cardDeviceId);
+			//设置控制卡id
+			if(Objects.nonNull(cardDeviceId)){
+				bos.write(cardDeviceId);
+			}
 			bos.write(PACKAGE_OPEN_CMD,1,PACKAGE_OPEN_CMD.length-1);
 			return bos.toByteArray();
 		} catch (Exception e) {
-			return PACKAGE_OPEN_CMD;
+			logger.error("packOpenCmdByCardDeviceId :{}",e);
+			return null;
 		}
 	}
 
 	/**
 	 * 根据控制卡设备ID 生成关闭屏幕指令
-	 * @param cardDeviceId
-	 * @return
+	 * @param cardDeviceId 控制卡id
+	 * @return 关闭屏幕指令
 	 */
 	public static byte[] packCloseCmdByCardDeviceId(byte[] cardDeviceId){
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
 			bos.write(0xA5);
-			bos.write(cardDeviceId);
+			//设置控制卡id
+			if(Objects.nonNull(cardDeviceId)){
+				bos.write(cardDeviceId);
+			}
 			bos.write(PACKAGE_CLOSE_CMD,1,PACKAGE_CLOSE_CMD.length-1);
 			return bos.toByteArray();
 		} catch (Exception e) {
-			return PACKAGE_CLOSE_CMD;
+			logger.error("packCloseCmdByCardDeviceId :{}",e);
+			return null;
 		}
 	}
 
 	/**
 	 * 根据控制卡设备ID 生成清除屏幕指令
-	 * @param cardDeviceId
-	 * @return
+	 * @param cardDeviceId 控制卡id
+	 * @return 清除屏幕指令
 	 */
 	public static byte[] packClearCmdByCardDeviceId(byte[] cardDeviceId){
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
 			bos.write(0xA5);
-			bos.write(cardDeviceId);
+			//设置控制卡id
+			if(Objects.nonNull(cardDeviceId)){
+				bos.write(cardDeviceId);
+			}
 			bos.write(PACKAGE_CLEAR_HARDWARE_CMD,1,PACKAGE_CLEAR_HARDWARE_CMD.length-1);
 			return bos.toByteArray();
 		} catch (Exception e) {
-			return PACKAGE_CLEAR_HARDWARE_CMD;
+			logger.error("packClearCmdByCardDeviceId :{}",e);
+			return null;
 		}
 	}
 
 	/**
-	 * 根据控制卡设备ID 生成关闭屏幕指令
-	 * @param cardDeviceId
-	 * @return
+	 * 根据控制卡设备ID 重启APP
+	 * @param cardDeviceId 控制卡id
+	 * @return 重启APP
 	 */
 	public static byte[] packRestartAppCmdByCardDeviceId(byte[] cardDeviceId){
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
 			bos.write(0xA5);
-			bos.write(cardDeviceId);
+			//设置控制卡id
+			if(Objects.nonNull(cardDeviceId)){
+				bos.write(cardDeviceId);
+			}
 			bos.write(PACKAGE_RESTART_APP_CMD,1,PACKAGE_RESTART_APP_CMD.length-1);
 			return bos.toByteArray();
 		} catch (Exception e) {
-			return PACKAGE_RESTART_APP_CMD;
+			logger.error("packRestartAppCmdByCardDeviceId :{}",e);
+			return null;
 		}
 	}
 
 
 	/**
-	 * 根据控制卡设备ID 生成关闭屏幕指令
-	 * @param cardDeviceId
-	 * @return
+	 * 根据控制卡设备ID 重启硬件指令
+	 * @param cardDeviceId 控制卡id
+	 * @return 重启硬件指令
 	 */
 	public static byte[] packRestartHardWareCmdByCardDeviceId(byte[] cardDeviceId){
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
 			bos.write(0xA5);
-			bos.write(cardDeviceId);
+			//设置控制卡id
+			if(Objects.nonNull(cardDeviceId)){
+				bos.write(cardDeviceId);
+			}
 			bos.write(PACKAGE_RESTART_HARDWARE_CMD,1,PACKAGE_RESTART_HARDWARE_CMD.length-1);
 			return bos.toByteArray();
 		} catch (Exception e) {
-			return PACKAGE_RESTART_HARDWARE_CMD;
+			logger.error("packRestartHardWareCmdByCardDeviceId :{}",e);
+			return null;
 		}
 	}
 
 	/**
 	 * 根据控制卡设备ID 生成心跳指令
-	 * @param cardDeviceId
-	 * @return
+	 * @param cardDeviceId 控制卡id
+	 * @return 生成心跳指令
 	 */
 	public static byte[] packHeartHardWareCmdByCardDeviceId(byte[] cardDeviceId){
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
 			bos.write(0xA5);
-			bos.write(cardDeviceId);
+			//设置控制卡id
+			if(Objects.nonNull(cardDeviceId)){
+				bos.write(cardDeviceId);
+			}
 			bos.write(PACKAGE_HEART_HARDWARE_CMD,1,PACKAGE_HEART_HARDWARE_CMD.length-1);
 			return bos.toByteArray();
 		} catch (Exception e) {
-			return PACKAGE_RESTART_HARDWARE_CMD;
+			logger.error("packHeartHardWareCmdByCardDeviceId :{}",e);
+			return null;
 		}
 	}
 
 	/**
 	 *  数据包加入设备标识
-	 * @param cardDeviceId
-	 * @param binary
+	 * @param cardDeviceId  控制卡id
+	 * @param binary 数据包内容(不带控制卡id)
 	 * @return
 	 */
 	public static byte[] packDataAddCardDeviceId(byte[] cardDeviceId,byte[] binary){
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
 			bos.write(0xA5);
-			bos.write(cardDeviceId);
+			//设置控制卡id
+			if(Objects.nonNull(cardDeviceId)){
+				bos.write(cardDeviceId);
+			}
 			bos.write(binary,1,binary.length-1);
 			return bos.toByteArray();
 		} catch (Exception e) {
@@ -192,18 +203,15 @@ public class PackDataUtils {
 			bos.write(0x01);
 			bos.write(0x46);
 			bos.write(0x01);//返回标识
-			//数据
 			bos.write(0x00);//包标识头
 			for(int i=1;i<=24;i++){
 				bos.write(lightnessNumber);
 			}
 			byte[] cd = bos.toByteArray();
-			//计算效验码
 			byte[] jym = new byte[cd.length - 1];// 校验码
 			System.arraycopy(cd, 1, jym, 0, jym.length);
 			int crc = calculationCRC(jym);// 校验码
 			byte[] data = intToByteArray(crc);// 得到低位字节数组
-			//debugData("校验码", data);
 			byte[] destData = new byte[cd.length + 3];
 			System.arraycopy(cd, 0, destData, 0, cd.length);
 			destData[destData.length - 3] = data[0];// 低位数值
@@ -211,6 +219,7 @@ public class PackDataUtils {
 			destData[destData.length - 1] = (byte) 0xAE;// 固定值
 			return destData;
 		} catch (Exception e) {
+			logger.error("packConfigLightness :{}",e);
 			return null;
 		}
 	}
@@ -229,7 +238,7 @@ public class PackDataUtils {
 	 * @param width 宽度
 	 * @param height 高度
 	 * @param cardDeviceId 控制卡id
-	 * @return
+	 * @return 设置模版指令
 	 */
 	public static byte[] setTemplate(int width,int height,byte[] cardDeviceId){
 		try(ByteArrayOutputStream bos = new ByteArrayOutputStream()){
@@ -251,12 +260,9 @@ public class PackDataUtils {
 			bos.write(0x00);//当前包序号和末尾包序号，如只一包数据可固定不变
 			bos.write(0x81);//设置模板指令
 			bos.write(0x01);//灰度
-			//int kd=196;//默认值
-			//int gd=112;
 			byte kd_size[] = intToByteArray(width); // 宽度
 			bos.write(kd_size[1]);
 			bos.write(kd_size[0]);
-			//debugData("数据", kd_size);
 			byte gd_size[] = intToByteArray(height);// 高度
 			bos.write(gd_size[1]);
 			bos.write(gd_size[0]);
@@ -294,25 +300,24 @@ public class PackDataUtils {
 			bos.write(0x00);//停留时间
 			bos.write(0x03 );//停留时间
 			bos.write(0x00 );//对其方式
-			byte[] cd =  bos.toByteArray();
-			byte[] jym = new byte[cd.length - 1-cardDeviceId.length];// 校验码
-			System.arraycopy(cd, 1+cardDeviceId.length, jym, 0, jym.length);
+			byte[] dataSource =  bos.toByteArray();
+			byte[] jym = new byte[dataSource.length - 1-cardDeviceId.length];// 校验码
+			System.arraycopy(dataSource, 1+cardDeviceId.length, jym, 0, jym.length);
 			int crc = calculationCRC(jym);// 校验码
 			byte[] data = intToByteArray(crc);// 得到低位字节数组
-			//debugData("校验码", data);
-			byte[] destData = new byte[cd.length + 3];
-			System.arraycopy(cd, 0, destData, 0, cd.length);
+			byte[] destData = new byte[dataSource.length + 3];
+			System.arraycopy(dataSource, 0, destData, 0, dataSource.length);
 			destData[destData.length - 3] = data[0];// 低位数值
 			destData[destData.length - 2] = data[1];// 高位
 			destData[destData.length - 1] = (byte) 0xAE;// 固定值
 			return destData;
 		} catch (Exception e) {
+			logger.error("stepTemplate :{}",e);
 			return null;
 		}
 	}
 
 	/**
-	 *
 	 * 进入节目模板方式
 	 * @return
 	 */
@@ -323,7 +328,8 @@ public class PackDataUtils {
 			bos.write(PACKAGE_TEMPLDATE_CMD,1,PACKAGE_TEMPLDATE_CMD.length-1);
 			return bos.toByteArray();
 		} catch (Exception e) {
-			return PACKAGE_TEMPLDATE_CMD;
+			logger.error("stepIntoTemplate :{}",e);
+			return null;
 		}
 	}
 
@@ -335,116 +341,37 @@ public class PackDataUtils {
 		return PACKAGE_TEMPLDATE_CMD;
 	}
 
-
 	/**
-	 * 组装流明控制卡数据包
-	 * 分多包的数据情况
-	 * @param info
+	 * 打包 单个内容
+	 * @param width
+	 * @param height
+	 * @param xh
+	 * @param font
+	 * @param time
+	 * @param sd
+	 * @param hy
+	 * @param content
 	 * @return
 	 */
-	public static List<byte[]> _packData() {
-		/**0x00: 立即显示
-		 0x01: 从左边展开
-		 0x02: 从左边展开
-		 0x03: 从中间向两边展开
-		 0x04: 从中间向上下展开
-		 0x05: 分段展开
-		 0x06: 向左边移出
-		 0x07: 向右边移出
-		 0x08: 向上边移出
-		 0x09: 向下边移出
-		 0x0A: 向上滚动
-		 0x0B: 向左滚动
-		 0x0C: 向右滚动*/
-		//组装相关的指令信息 相关的逻辑判断
-		int width=128;
-		int height=48;
-		int xh=1;//节目序号
-		byte font = 24;// 文字大小 16号2,24号3,32号4
-		int time = 3;//停留时间?
-		byte sd = 3;// 速度 1～100 1 数值越小，速度越快 1:最快2:快速3:中速4:慢速5:最慢
-		switch(sd){
-			case 1:
-				sd =0;//最快
-				break;
-			case 2:
-				sd = 3;//快速
-				break;
-			case 3:
-				sd = 10;//中速
-				break;
-			case 4:
-				sd = 50;//慢速
-				break;
-			case 5:
-				sd = 100;//最慢
-				break;
-			default:
-				sd = 0;//立即打出
-				break;
-		}
-		byte hy=1;//显示花样 1:左移2:右移3:上移4:下移5:立即打出
-		switch(hy){
-			case 1:
-				hy =0x06;//左移
-				break;
-			case 2:
-				hy = 0x07;//右移
-				break;
-			case 3:
-				hy = 0x08;//上移
-				break;
-			case 4:
-				hy = 0x09;//下移
-				break;
-			case 5:
-				hy = 0;//立即打出
-				break;
-			default:
-				hy = 0;//立即打出
-				break;
-		}
-		//hy = 63;
-		String title = "title";
-		String content = "getContent";
-		String inscribed = "getInscribed";
-		for (int i = 1; i <= 10; i++) {
-			title += "title>" + i;
-			content += "content >" + i;
-			inscribed += "content" + i;
-		}
-		return packDataByMany(width, height, xh, font, time, sd, hy, title, content, inscribed);
+	public static List<byte[]> packSubcontract(int width, int height, int xh,int font, int time, int sd, int hy, String content) {
+		return packSubcontract(width, height, xh, font, time, sd, hy, content,null,null);
 	}
 
-
 	/**
-	 * 组装数据包
-	 * 分多包的数据情况
-	 *
+	 *  打包 带有标题 内容 结尾的样式
 	 * @param width
-	 *            宽度
 	 * @param height
-	 *            高度
 	 * @param xh
-	 *            序号
 	 * @param font
-	 *            字体
 	 * @param time
-	 *            时间
 	 * @param sd
-	 *            速度
-	 * @param hy  0x06;//左移 0立即打出
-	 *            花样
+	 * @param hy
 	 * @param title
-	 *            标题
 	 * @param content
-	 *            内容
 	 * @param inscribed
-	 *            落款
 	 * @return
 	 */
-
-	public static List<byte[]> packDataByMany(int width, int height, int xh,int font, int time, int sd, int hy, String title,String content, String inscribed) {
+	public static List<byte[]> packSubcontract(int width, int height, int xh,int font, int time, int sd, int hy, String title,String content, String inscribed) {
 		logger.info(("设备宽度：{} 设备高度：{} 节目序号为：{}"), new Object[] { width, height, xh });
 		Charset GB18030 = Charset.forName("GB18030");
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
@@ -491,10 +418,6 @@ public class PackDataUtils {
 			if(inscribed!=null && !"".equals(inscribed.trim())){//添加4个空格
 				sbuilderInfo.append(inscribed);//落款
 			}
-			//System.out.println("完整信息:"+sbuilderInfo);
-			/**
-			 * 开始分包
-			 */
 			bos.write(0x88);// CC 0x88 发送独立节目
 			bos.write(0x00);// 用户附加码，固定
 			bos.write(0x00);// 用户附加码，固定
@@ -541,17 +464,12 @@ public class PackDataUtils {
 			//定义包的大小
 			//int sizeData = 800;
 			int sizeData = 300;
-			//sizeData = 200;
-			//11+22*1 = 33
-			//数据区域长度
-			//窗口数据长度
 			byte[] msgDataInfo = sbuilderInfo.toString().getBytes(GB18030);
 			byte wznr_length[] = intToByteArray(msgDataInfo.length);
 			bos.write(wznr_length[2]);
 			bos.write(wznr_length[1]);
 			bos.write(wznr_length[0]);
 			//写入固定数据
-			//窗口数据		变长	窗口要播放的数据，如“文本”、“图片”等。第1字节：数据类型(1文本；4图片)第2字节：数据格式（同发文本或发图片的定义）第3字节起：文本或图片数据。
 			bos.write(0x01);
 			bos.write(0x00);
 			byte[] commHeader = bos.toByteArray();//Header包
@@ -563,7 +481,6 @@ public class PackDataUtils {
 			msgDataInfo = newMsgDataInfo;
 			int lastPack = sizeCd % sizeData;
 			int dsCount = lastPack == 0 ? sizeCd / sizeData : sizeCd / sizeData+ 1;
-			//System.out.println("数据包数量: " + dsCount);
 			logger.info("数据包分包数量: {}",dsCount);
 			for (int i = 0; i < dsCount; i++) {
 				bos.reset();
@@ -573,7 +490,6 @@ public class PackDataUtils {
 				bos.write(0x01);
 				bos.write(0x7B);
 				bos.write(0x01);
-				//写固定长度数据 写入包的数据长度信息
 				if (i != dsCount - 1) {
 					byte[] tmp = intToByteArray(sizeData);
 					bos.write(tmp[0]);
@@ -832,7 +748,7 @@ public class PackDataUtils {
 			bosCc.write(0x00);
 			bosCc.write(0x01);
 			//节目号
-			bosCc.write(0x02);
+			bosCc.write(0x01);
 			//窗口号
 			bosCc.write(0x01);
 			//属性
@@ -980,15 +896,15 @@ public class PackDataUtils {
 		return buffer.toString();
 	}
 
-	public static AbstractCommand binaryTransCmd(byte[] datas,DatagramPacket datagramPacket) {
-		AbstractCommand cmd = new AbstractCommand();
-		cmd.setDataBinary(datas);
-		cmd.setDatagramPacket(datagramPacket);
-		return cmd;
-	}
-
-	public static AbstractCommand binaryTransCmd(byte[] datas,byte[] cardId,DatagramPacket datagramPacket) {
-		AbstractCommand cmd = new AbstractCommand();
+	/**
+	 * 转换为Cmd
+	 * @param datas 内容
+	 * @param cardId 控制卡id
+	 * @param datagramPacket packet
+	 * @return CMD 命令
+	 */
+	public static CommonCommand binaryTransCmd(byte[] datas, byte[] cardId, DatagramPacket datagramPacket) {
+		CommonCommand cmd = new CommonCommand();
 		cmd.setDataBinary(datas);
 		cmd.setDataCardId(cardId);
 		cmd.setDatagramPacket(datagramPacket);
