@@ -4,19 +4,18 @@ package com.led.netty.codec;
 import com.led.netty.pojo.CommonCommand;
 import com.led.netty.pojo.HeartBeatCommand;
 import com.led.netty.utils.IOUtils;
+import com.led.netty.utils.LoggerUtils;
 import com.led.netty.utils.PackDataUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.socket.DatagramPacket;
 import io.netty.handler.codec.ByteToMessageDecoder;
-import io.netty.util.AttributeKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
@@ -32,13 +31,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.Closeable{
 	
 	private static final Logger logger = LoggerFactory.getLogger(HardWareUdpDecoder.class);
-	
-	public static final AttributeKey<String> NETTY_CHANNEL_KEY = AttributeKey.valueOf("netty.channel.user_pack");
 
-	public static final  Integer MAX_HEADER_SIZE = 10000;
+	public static final  Integer MAX_HEADER_SIZE = 1024*512;
 
-	private volatile boolean isSendOpenCmd = true;
-	
 	//开始读取,内容,完成
 	private boolean isReady = true;
 	//数据包存放区域...
@@ -73,13 +68,10 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 	//
 	private Queue<Object> queueData = new java.util.concurrent.LinkedBlockingDeque<Object>();
 
-	@Override
-	protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
-		System.out.println(" HardWareUdpDecoder decode ");
-	}
 
 	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+		System.out.println(" Thread "+Thread.currentThread());
 		if(msg instanceof DatagramPacket){
 			DatagramPacket datagramPacket = (DatagramPacket)msg;
 			ByteBuf in = datagramPacket.content();
@@ -87,48 +79,12 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 		}
 	}
 
+	@Override
+	protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
 
-
-	/**
-	 * 先读然后在进行数据转义
-	 * @param ctx
-	 * @param in
-	 * @param out
-	 * @throws Exception
-	 */
-	protected void decodeReadByString(ChannelHandlerContext ctx, ByteBuf in, Queue<Object> out) throws Exception {
-		while (in.isReadable()) {
-			byte data = in.readByte();
-			baos.write(data);
-			boolean is0xA5 = data == DATA_BEGIN;
-			boolean is0xAE = data == DATA_END;
-			if(isReady && is0xA5) {//数据开头
-				System.out.println("数据开头");
-				checkDataAndReset(baos);
-				isReady = false;
-			}else if(is0xAE) {//数据结尾
-				System.out.println("数据结尾");
-				checkDataAndReset(baos);
-				isReady = true;
-				//完成数据读取...
-				byte[] datas = baos.toByteArray();
-				baos.reset();//重置数据,可能是无效的数据
-				StringBuilder _builder = new StringBuilder();
-				String msg = ByteBufUtil.hexDump(datas).toUpperCase();
-				for(int i =0;i<msg.length();i++){
-					if(i%2==0) _builder.append(" ");
-					_builder.append(msg.charAt(i));
-				}
-				System.out.println("原始网络数据:"+_builder);
-				out.add(datas);
-				//转换 AA05 AA0E AA0A
-				msg = msg.replaceAll("AA05","A5").replaceAll("AA0E","AE").replaceAll("AA0A","AA");
-				System.out.println("转义之后数据:"+msg);
-				byte[] zhDatas = msg.getBytes();
-				out.add(datas);
-			}
-		}
 	}
+
+
 
 	/**
 	 * RS232/RS485返回数据包
@@ -142,7 +98,6 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 		while(in.isReadable()) {
 			byte data = in.readByte();
 			packageCount.incrementAndGet();
-			//System.out.println(Integer.toHexString(data) +" "+data);
 			boolean is0xA5 = data==DATA_BEGIN;
 			boolean is0xAE = data==DATA_END;
 			if(data==(byte)0xE8 || data==(byte)0x68){ // 0xE8 0x68
@@ -150,86 +105,47 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 				indexPackageType = packageCount.get();
 			}
 			if(isReady && is0xA5) {//数据开头
-				//System.out.println("数据开头");
 				checkDataAndReset(baos);
 				isReady = false;
 				baos.reset();//重置数据,可能是无效的数据
 				baos.write(data);
 			}else if(is0xAE) {//数据结尾
-				//System.out.println("数据结尾");
 				checkDataAndReset(baos);
 				baos.write(data);
 				isReady = true;
 				//完成数据读取...
 				byte[] datas = baos.toByteArray();
-				//
-				StringBuilder _builder = new StringBuilder();
-				String msg = ByteBufUtil.hexDump(datas).toUpperCase();
-				for(int i =0;i<msg.length();i++){
-					if(i%2==0) _builder.append(" ");
-					_builder.append(msg.charAt(i));
-				}
 				CommonCommand cmd = null;
 				//数据业务处理
 				if(isHeartPackage){
-					System.out.println("收到数据:..."+_builder);
 					cardDeviceId = Arrays.copyOfRange(datas,1,datas.length-2);
 					controlCardId = new String(cardDeviceId);
-					//System.out.println("controlCardId "+controlCardId+" cardDeviceId "+cardDeviceId);
 					cmd = new HeartBeatCommand();
 					datas = PackDataUtils.packHeartHardWareCmdByCardDeviceId(cardDeviceId);
 					cmd.setDataBinary(datas);
 					cmd.setDatagramPacket(datagramPacket);
 					cmd.setDataCardId(cardDeviceId);
-					ctx.fireChannelRead(cmd);; //调用发送
 				}else{
-					System.out.println("收到数据:"+_builder);
-					//DebugUtils.debugData("decoder", datas);
-					//String hexDump = ByteBufUtil.hexDump(datas);
-					//System.out.println(hexDump);
-					//logger.info("收到完整数据包...{}",hexDump);
 					if(indexPackageType!=-1 && indexPackageType>1) {
 						cardDeviceId= Arrays.copyOfRange(datas, 1, indexPackageType - 1);
 						controlCardId = new String(cardDeviceId);
-						//System.out.println("controlCardId "+controlCardId+" cardDeviceId "+cardDeviceId);
-						byte[] crcData = Arrays.copyOfRange(datas,indexPackageType-1,datas.length-3);
-						//計算crc
-						int crcNumber = PackDataUtils.calculationCRC(crcData);
-						byte[] crcs = PackDataUtils.intToByteArray(crcNumber);
-						//System.out.println(crcs[0]+" "+crcs[1]+" "+PackDataUtils.binaryToHexString(crcs));
+						cmd = PackDataUtils.binaryTransCmd(datas,cardDeviceId,datagramPacket);
 					}
-					cmd = PackDataUtils.binaryTransCmd(datas,cardDeviceId,datagramPacket);
 				}
 
-				InetSocketAddress sender = datagramPacket.sender();
-				InetSocketAddress recipient = datagramPacket.recipient();
-
+				//InetSocketAddress sender = datagramPacket.sender();
+				//InetSocketAddress recipient = datagramPacket.recipient();
 				//System.out.println("sender "+sender+" recipient "+recipient);
 
 				if(null!=cmd) { //写数据
-					if(isSendOpenCmd) {
-						isSendOpenCmd = false;
-					}
+					LoggerUtils.writeOutLog(1,cmd,logger);
 					ctx.fireChannelRead(cmd);; //调用发送
-				}else{
-					//out.add(datas);
-					//byte[] openCmd = PackDataUtils.packOpenCmdByCardDeviceId(cardDeviceId);
-					//out.add(openCmd);
-					//byte[] closeCmd = PackDataUtils.packCloseCmdByCardDeviceId(cardDeviceId);
-					//out.add(closeCmd);
-
-					//closeCmd = PackDataUtils.packRestartAppCmdByCardDeviceId(cardDeviceId);
-					//out.add(closeCmd);
-
-					//closeCmd = PackDataUtils.packRestartHardWareCmdByCardDeviceId(cardDeviceId);
-					//out.add(closeCmd);
-
 				}
 				//完整的数据包...
 				reset();
 			}else {
 				checkDataAndReset(baos);
-				transCoding(in, data,baos);//转码...
+				transCoding(in, data,baos);
 			}
 		}
 	}
@@ -238,7 +154,6 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 
 	public void checkDataAndReset(ByteArrayOutputStream baos){
 		if(validateHead(baos)){
-			System.out.println("error....");
 			baos.reset();//超过了数据包长度,丢弃无效数据
 		}
 	}
@@ -312,9 +227,50 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 	}
 
 
+	/**
+	 * 先读然后在进行数据转义.
+	 * @param ctx
+	 * @param in
+	 * @param out
+	 * @throws Exception
+	 */
+	protected void decodeReadByString(ChannelHandlerContext ctx, ByteBuf in, Queue<Object> out) throws Exception {
+		while (in.isReadable()) {
+			byte data = in.readByte();
+			baos.write(data);
+			boolean is0xA5 = data == DATA_BEGIN;
+			boolean is0xAE = data == DATA_END;
+			if(isReady && is0xA5) {//数据开头
+				System.out.println("数据开头");
+				checkDataAndReset(baos);
+				isReady = false;
+			}else if(is0xAE) {//数据结尾
+				System.out.println("数据结尾");
+				checkDataAndReset(baos);
+				isReady = true;
+				//完成数据读取...
+				byte[] datas = baos.toByteArray();
+				baos.reset();//重置数据,可能是无效的数据
+				StringBuilder _builder = new StringBuilder();
+				String msg = ByteBufUtil.hexDump(datas).toUpperCase();
+				for(int i =0;i<msg.length();i++){
+					if(i%2==0) _builder.append(" ");
+					_builder.append(msg.charAt(i));
+				}
+				System.out.println("原始网络数据:"+_builder);
+				//out.add(datas);
+				//转换 AA05 AA0E AA0A
+				msg = msg.replaceAll("AA05","A5").replaceAll("AA0E","AE").replaceAll("AA0A","AA");
+				System.out.println("转义之后数据:"+msg);
+				byte[] zhDatas = msg.getBytes();
+				out.add(datas);
+			}
+		}
+	}
+
+
 	@Override
 	public void close() throws IOException {
-		System.out.println("DECODER... closeQuietly");
 		IOUtils.closeQuietly(baos);
 	}
 

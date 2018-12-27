@@ -1,11 +1,14 @@
 package com.led.netty.utils;
 
 import com.led.netty.pojo.CommonCommand;
+import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.socket.DatagramPacket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.StringUtils;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.List;
@@ -375,48 +378,15 @@ public class PackDataUtils {
 		logger.info(("设备宽度：{} 设备高度：{} 节目序号为：{}"), new Object[] { width, height, xh });
 		Charset GB18030 = Charset.forName("GB18030");
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
-			StringBuilder sbuilderInfo = new StringBuilder();
+			StringBuilder builderText = new StringBuilder();
 			if(title!=null && !"".equals(title.trim())){
-				int fontSize = 16;
-				switch(font){
-					case 2:
-						fontSize = 16;
-						break;
-					case 3:
-						fontSize = 24;
-						break;
-					case 4:
-						fontSize = 32;
-						break;
-					case 5:
-						fontSize = 40;
-						break;
-					case 6:
-						fontSize = 48;
-						break;
-					case 7:
-						fontSize = 56;
-						break;
-				}
-				int maxFontSize = width / fontSize;// 一行最多显示的字数
-				int titleFontSize = title.length();// 标题的长度
-				int countFonts = maxFontSize - titleFontSize;// 添加空格数
-				countFonts = countFonts > 0 ? countFonts==1 ? 1 : countFonts / 2 : 0;// 标题添加多少空格
-				boolean isZc = maxFontSize%2==0;
-				for (int count = 0; count < countFonts; count++) {
-					if(isZc){
-						sbuilderInfo.append("  ");
-					}else{
-						sbuilderInfo.append(" ");
-					}
-				}
-				sbuilderInfo.append(title).append("\r\n");//添加标题
+				calculateDataOnScreen(width, font, title, builderText);
 			}
 			if(content!=null && !"".equals(content.trim())){
-				sbuilderInfo.append(content);//添加内容
+				builderText.append(content);//添加内容
 			}
 			if(inscribed!=null && !"".equals(inscribed.trim())){//添加4个空格
-				sbuilderInfo.append(inscribed);//落款
+				builderText.append(inscribed);//落款
 			}
 			bos.write(0x88);// CC 0x88 发送独立节目
 			bos.write(0x00);// 用户附加码，固定
@@ -464,11 +434,11 @@ public class PackDataUtils {
 			//定义包的大小
 			//int sizeData = 800;
 			int sizeData = 300;
-			byte[] msgDataInfo = sbuilderInfo.toString().getBytes(GB18030);
-			byte wznr_length[] = intToByteArray(msgDataInfo.length);
-			bos.write(wznr_length[2]);
-			bos.write(wznr_length[1]);
-			bos.write(wznr_length[0]);
+			byte[] msgDataInfo = builderText.toString().getBytes(GB18030);
+			byte textBinary[] = intToByteArray(msgDataInfo.length);
+			bos.write(textBinary[2]);
+			bos.write(textBinary[1]);
+			bos.write(textBinary[0]);
 			//写入固定数据
 			bos.write(0x01);
 			bos.write(0x00);
@@ -479,75 +449,116 @@ public class PackDataUtils {
 			System.arraycopy(commHeader, 0, newMsgDataInfo, 0, commHeader.length);
 			System.arraycopy(msgDataInfo, 0, newMsgDataInfo, commHeader.length, msgDataInfo.length);
 			msgDataInfo = newMsgDataInfo;
-			int lastPack = sizeCd % sizeData;
-			int dsCount = lastPack == 0 ? sizeCd / sizeData : sizeCd / sizeData+ 1;
+			int lastPackSize = sizeCd % sizeData;
+			int dsCount = lastPackSize == 0 ? sizeCd / sizeData : sizeCd / sizeData+ 1;
 			logger.info("数据包分包数量: {}",dsCount);
-			for (int i = 0; i < dsCount; i++) {
-				bos.reset();
-				bos.write(0xA5);
-				bos.write(0x68);
-				bos.write(0x32);
-				bos.write(0x01);
-				bos.write(0x7B);
-				bos.write(0x01);
-				if (i != dsCount - 1) {
-					byte[] tmp = intToByteArray(sizeData);
-					bos.write(tmp[0]);
-					bos.write(tmp[1]);
-				} else {
-					byte[] tmp = intToByteArray(lastPack);
-					bos.write(tmp[0]);
-					bos.write(tmp[1]);
-				}
-				//包序号PO
-				bos.write(i);
-				//最末包序号TP
-				bos.write(dsCount - 1);
-				byte[] jym = (byte[]) null;
-				if ((i != dsCount - 1) && (sizeCd >= sizeData)) {
-					jym = new byte[sizeData];
-				} else{
-					jym = new byte[lastPack];
-				}
-				System.arraycopy(msgDataInfo, i * sizeData, jym, 0, jym.length);
-				bos.write(jym);
-				byte[] arrayData = bos.toByteArray();
-				byte[] jymData = new byte[arrayData.length - 1];
-				System.arraycopy(arrayData, 1, jymData, 0, jymData.length);
-				int crc = calculationCRC(jymData);
-				byte[] data = intToByteArray(crc);
-				bos.write(data[0]);
-				bos.write(data[1]);
-				bos.write(0xae);
-				byte[] tmpArrays = bos.toByteArray();
-				bos.reset();
-				bos.write(0xa5);
-				// 0xa5  0xaa 0x05。目的是避免与起始符0xa5相同
-				// 0xae  0xaa 0x0e。目的是避免与结束符0xae相同。
-				// 0xaa  0xaa 0x0a。目的是避免与转义符0xaa相同。
-				for (int j = 1; j < tmpArrays.length - 1; j++) {
-					if (tmpArrays[j] == -91) {
-						bos.write(0xaa);
-						bos.write(0x05);
-					} else if (tmpArrays[j] == -82) {
-						bos.write(0xaa);
-						bos.write(0x0e);
-					} else if (tmpArrays[j] == -86) {
-						bos.write(0xaa);
-						bos.write(0x0a);
-					} else {
-						bos.write(tmpArrays[j]);
-					}
-				}
-				bos.write(0xae);
-				tmpArrays = bos.toByteArray();
-				packList.add(tmpArrays);
-			}
+			calculateSubpackage(bos, packList, sizeData, msgDataInfo, sizeCd, lastPackSize, dsCount);
 			return packList;
 		} catch (Exception e) {
 			logger.error("组装数据包出错:{}", e);
 			return null;
 		}
+	}
+
+	private static void calculateSubpackage(ByteArrayOutputStream bos, List<byte[]> packList, int sizeData, byte[] msgDataInfo, int sizeCd, int lastPackSize, int dsCount) throws IOException {
+		for (int i = 0; i < dsCount; i++) {
+			bos.reset();
+			bos.write(0xA5);
+			bos.write(0x68);
+			bos.write(0x32);
+			bos.write(0x01);
+			bos.write(0x7B);
+			bos.write(0x01);
+			if (i != dsCount - 1) {
+				byte[] tmp = intToByteArray(sizeData);
+				bos.write(tmp[0]);
+				bos.write(tmp[1]);
+			} else {
+				byte[] tmp = intToByteArray(lastPackSize);
+				bos.write(tmp[0]);
+				bos.write(tmp[1]);
+			}
+			//包序号PO
+			bos.write(i);
+			//最末包序号TP
+			bos.write(dsCount - 1);
+			byte[] jym = (byte[]) null;
+			if ((i != dsCount - 1) && (sizeCd >= sizeData)) {
+				jym = new byte[sizeData];
+			} else {
+				jym = new byte[lastPackSize];
+			}
+			System.arraycopy(msgDataInfo, i * sizeData, jym, 0, jym.length);
+			bos.write(jym);
+			byte[] arrayData = bos.toByteArray();
+			byte[] jymData = new byte[arrayData.length - 1];
+			System.arraycopy(arrayData, 1, jymData, 0, jymData.length);
+			int crc = calculationCRC(jymData);
+			byte[] data = intToByteArray(crc);
+			bos.write(data[0]);
+			bos.write(data[1]);
+			bos.write(0xae);
+			byte[] packBinary = bos.toByteArray();
+			bos.reset();
+			bos.write(0xa5);
+			// 0xa5  0xaa 0x05。目的是避免与起始符0xa5相同
+			// 0xae  0xaa 0x0e。目的是避免与结束符0xae相同。
+			// 0xaa  0xaa 0x0a。目的是避免与转义符0xaa相同。
+			for (int j = 1; j < packBinary.length - 1; j++) {
+				if (packBinary[j] == -91) {
+					bos.write(0xaa);
+					bos.write(0x05);
+				} else if (packBinary[j] == -82) {
+					bos.write(0xaa);
+					bos.write(0x0e);
+				} else if (packBinary[j] == -86) {
+					bos.write(0xaa);
+					bos.write(0x0a);
+				} else {
+					bos.write(packBinary[j]);
+				}
+			}
+			bos.write(0xae);
+			packBinary = bos.toByteArray();
+			packList.add(packBinary);
+		}
+	}
+
+	private static void calculateDataOnScreen(int width, int font, String title, StringBuilder builderText) {
+		int fontSize = 16;
+		switch (font) {
+			case 2:
+				fontSize = 16;
+				break;
+			case 3:
+				fontSize = 24;
+				break;
+			case 4:
+				fontSize = 32;
+				break;
+			case 5:
+				fontSize = 40;
+				break;
+			case 6:
+				fontSize = 48;
+				break;
+			case 7:
+				fontSize = 56;
+				break;
+		}
+		int maxFontSize = width / fontSize;// 一行最多显示的字数
+		int titleFontSize = title.length();// 标题的长度
+		int countFonts = maxFontSize - titleFontSize;// 添加空格数
+		countFonts = countFonts > 0 ? countFonts == 1 ? 1 : countFonts / 2 : 0;// 标题添加多少空格
+		boolean isZc = maxFontSize % 2 == 0;
+		for (int count = 0; count < countFonts; count++) {
+			if (isZc) {
+				builderText.append("  ");
+			} else {
+				builderText.append(" ");
+			}
+		}
+		builderText.append(title).append("\r\n");//添加标题
 	}
 
 	/**
@@ -569,41 +580,8 @@ public class PackDataUtils {
 		Charset GB18030 = Charset.forName("GB18030");
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
 			StringBuilder sbuilderInfo = new StringBuilder();
-			if(title!=null && !"".equals(title.trim())){
-				int fontSize = 16;
-				switch(font){
-					case 2:
-						fontSize = 16;
-						break;
-					case 3:
-						fontSize = 24;
-						break;
-					case 4:
-						fontSize = 32;
-						break;
-					case 5:
-						fontSize = 40;
-						break;
-					case 6:
-						fontSize = 48;
-						break;
-					case 7:
-						fontSize = 56;
-						break;
-				}
-				int maxFontSize = width / fontSize;// 一行最多显示的字数
-				int titleFontSize = title.length();// 标题的长度
-				int countFonts = maxFontSize - titleFontSize;// 添加空格数
-				countFonts = countFonts > 0 ? countFonts==1 ? 1 : countFonts / 2 : 0;// 标题添加多少空格
-				boolean isZc = maxFontSize%2==0;
-				for (int count = 0; count < countFonts; count++) {
-					if(isZc){
-						sbuilderInfo.append("  ");
-					}else{
-						sbuilderInfo.append(" ");
-					}
-				}
-				sbuilderInfo.append(title).append("\r\n");//添加标题
+			if(StringUtils.hasText(title)){
+				calculateDataOnScreen(width, font, title, sbuilderInfo);
 			}
 			if(content!=null && !"".equals(content.trim())){
 				sbuilderInfo.append(content);//添加内容
@@ -656,68 +634,7 @@ public class PackDataUtils {
 			int dsCount = lastPack == 0 ? sizeCd / sizeData : sizeCd / sizeData+ 1;
 			System.out.println("数据包数量: " + dsCount);
 			logger.info("数据包分包数量: {}",dsCount);
-			for (int i = 0; i < dsCount; i++) {
-				bos.reset();
-				bos.write(0xA5);
-				bos.write(0x68);
-				bos.write(0x32);
-				bos.write(0x01);
-				bos.write(0x7B);
-				bos.write(0x01);
-				//写固定长度数据 写入包的数据长度信息
-				if (i != dsCount - 1) {
-					byte[] tmp = intToByteArray(sizeData);
-					bos.write(tmp[0]);
-					bos.write(tmp[1]);
-				} else {
-					byte[] tmp = intToByteArray(lastPack);
-					bos.write(tmp[0]);
-					bos.write(tmp[1]);
-				}
-				//包序号PO
-				bos.write(i);
-				//最末包序号TP
-				bos.write(dsCount - 1);
-				byte[] jym = (byte[]) null;
-				if ((i != dsCount - 1) && (sizeCd >= sizeData)) {
-					jym = new byte[sizeData];
-				} else{
-					jym = new byte[lastPack];
-				}
-				System.arraycopy(msgDataInfo, i * sizeData, jym, 0, jym.length);
-				bos.write(jym);
-				byte[] arrayData = bos.toByteArray();
-				byte[] jymData = new byte[arrayData.length - 1];
-				System.arraycopy(arrayData, 1, jymData, 0, jymData.length);
-				int crc = calculationCRC(jymData);
-				byte[] data = intToByteArray(crc);
-				bos.write(data[0]);
-				bos.write(data[1]);
-				bos.write(0xae);
-				byte[] tmpArrays = bos.toByteArray();
-				bos.reset();
-				bos.write(0xa5);
-				// 0xa5  0xaa 0x05。目的是避免与起始符0xa5相同
-				// 0xae  0xaa 0x0e。目的是避免与结束符0xae相同。
-				// 0xaa  0xaa 0x0a。目的是避免与转义符0xaa相同。
-				for (int j = 1; j < tmpArrays.length - 1; j++) {
-					if (tmpArrays[j] == -91) {
-						bos.write(0xaa);
-						bos.write(0x05);
-					} else if (tmpArrays[j] == -82) {
-						bos.write(0xaa);
-						bos.write(0x0e);
-					} else if (tmpArrays[j] == -86) {
-						bos.write(0xaa);
-						bos.write(0x0a);
-					} else {
-						bos.write(tmpArrays[j]);
-					}
-				}
-				bos.write(0xae);
-				tmpArrays = bos.toByteArray();
-				packList.add(tmpArrays);
-			}
+			calculateSubpackage(bos, packList, sizeData, msgDataInfo, sizeCd, lastPack, dsCount);
 			return packList;
 		} catch (Exception e) {
 			logger.error("组装数据包出错:{}", e);
@@ -910,4 +827,6 @@ public class PackDataUtils {
 		cmd.setDatagramPacket(datagramPacket);
 		return cmd;
 	}
+
+
 }

@@ -2,9 +2,8 @@ package com.led.netty.codec;
 
 import com.led.netty.pojo.CommonCommand;
 import com.led.netty.pojo.HeartBeatCommand;
-import com.led.netty.utils.PackDataUtils;
+import com.led.netty.utils.LoggerUtils;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.socket.DatagramPacket;
@@ -25,32 +24,23 @@ public class HardWareUdpEncoder extends MessageToMessageEncoder<Object> {
 
 	@Override
 	protected void encode(ChannelHandlerContext ctx, Object msg, List<Object> out) throws Exception {
-		logger.info("HardWareUdpEncoder encode ");
 		if(msg instanceof HeartBeatCommand) {
-			CommonCommand cmd = (CommonCommand)msg;
+			HeartBeatCommand cmd = (HeartBeatCommand)msg;
 			ByteBuf buf = Unpooled.copiedBuffer(cmd.getDataBinary());
 			DatagramPacket datagramPacket = new DatagramPacket(buf,cmd.getDatagramPacket().sender());
 			out.add(datagramPacket);
-			printOutEncode(cmd);
+			LoggerUtils.writeOutLog(2,cmd,logger);
 		}else if(msg instanceof CommonCommand){
 			CommonCommand cmd = (CommonCommand)msg;
 			ByteBuf buf = Unpooled.copiedBuffer(cmd.getDataBinary());
 			DatagramPacket datagramPacket = new DatagramPacket(buf,cmd.getDatagramPacket().sender());
 			out.add(datagramPacket);
-			printOutEncode(cmd);
+			LoggerUtils.writeOutLog(2,cmd,logger);
 		}else{
-			System.out.println(" HardWareUdpEncoder else");
+			logger.error("unkonw cmd ...{}",msg);
 		}
 	}
 
-	public void printOutEncode(CommonCommand cmd){
-		StringBuilder _builder = new StringBuilder();
-		String info = ByteBufUtil.hexDump(cmd.getDataBinary()).toUpperCase();
-		for(int i =0;i<info.length();i++){
-			if(i%2==0) _builder.append(" ");
-			_builder.append(info.charAt(i));
-		}
-		logger.info("发送数据.msg:{},",_builder);
-	}
+
 	
 }

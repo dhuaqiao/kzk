@@ -8,36 +8,15 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.DatagramChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
-import javax.net.ssl.SSLException;
-
-@SpringBootApplication(scanBasePackages = { "com.led.netty.config", "com.led.netty" })
+//@SpringBootApplication(scanBasePackages = { "com.led.netty.config", "com.led.netty" })
+@Component
+@Scope("prototype")
 public class NettyUdpServerInitializer extends ChannelInitializer<DatagramChannel> {
 
 	private static final Logger logger = LoggerFactory.getLogger(NettyUdpServerInitializer.class);
-
-	@Autowired
-	private NettyUdpServerConfig nettyUdpServerConfig;
-
-	/**
-	 * 启动
-	 * 
-	 * @throws InterruptedException
-	 * @throws SSLException
-	 */
-	@PostConstruct
-	public void start() throws InterruptedException, SSLException {
-		nettyUdpServerConfig.start();
-	}
-
-	@PreDestroy
-	public void stop() {
-		nettyUdpServerConfig.stop();
-	}
 
 	@Override
 	protected void initChannel(DatagramChannel ch) throws Exception {
