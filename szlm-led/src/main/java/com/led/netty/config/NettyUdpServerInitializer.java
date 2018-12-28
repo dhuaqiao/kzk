@@ -12,9 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-//@SpringBootApplication(scanBasePackages = { "com.led.netty.config", "com.led.netty" })
+//@Scope("prototype")
 @Component
-@Scope("prototype")
 public class NettyUdpServerInitializer extends ChannelInitializer<DatagramChannel> {
 
 	private static final Logger logger = LoggerFactory.getLogger(NettyUdpServerInitializer.class);
@@ -36,3 +35,4 @@ public class NettyUdpServerInitializer extends ChannelInitializer<DatagramChanne
 		pipeline.addLast(hardWareUdpDecoder).addLast(hardWareUdpEncoder).addLast(hardWareUdpHandler);
 	}
 }
+
