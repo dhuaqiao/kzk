@@ -4,7 +4,6 @@ package com.led.netty.codec;
 import com.led.netty.pojo.CommonCommand;
 import com.led.netty.pojo.HeartBeatCommand;
 import com.led.netty.utils.IOUtils;
-import com.led.netty.utils.LoggerUtils;
 import com.led.netty.utils.PackDataUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
@@ -13,6 +12,7 @@ import io.netty.channel.socket.DatagramPacket;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author Administrator
  *
  */
+@Component
 public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.Closeable{
 	
 	private static final Logger logger = LoggerFactory.getLogger(HardWareUdpDecoder.class);
@@ -43,12 +44,16 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 
 	//计数,计算包类型出现的位置...
 	private AtomicInteger packageCount = new AtomicInteger();
+	//验证消息成功与否
+	private AtomicInteger vaildateCount = new AtomicInteger();
 	//包类型出现位置
 	private int indexPackageType = -1;
     //控制卡设备id
 	private String controlCardId;
 	//控制卡设备id 数组
 	private byte[] cardDeviceId;
+	//记录成功 0 成功 1 失败
+	private int code = -1;
 
 	//包头
 	public static final byte DATA_BEGIN = (byte)0xA5;
@@ -62,16 +67,16 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 	public static final byte DATA_CONVERT_0X0E = (byte)0x0E;
 	//
 	public static final byte DATA_CONVERT_0X0A = (byte)0x0A;
+	//
+	public static final byte DATA_CONVERT_0X7B = (byte)0x7B;
 	//区分当前是心跳包还是正常数据包,默认是心跳包......
 	private volatile boolean isHeartPackage = true;
-
 	//
 	private Queue<Object> queueData = new java.util.concurrent.LinkedBlockingDeque<Object>();
 
 
 	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-		System.out.println(" Thread "+Thread.currentThread());
 		if(msg instanceof DatagramPacket){
 			DatagramPacket datagramPacket = (DatagramPacket)msg;
 			ByteBuf in = datagramPacket.content();
@@ -81,7 +86,7 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 
 	@Override
 	protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
-
+		//igore
 	}
 
 
@@ -100,9 +105,15 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 			packageCount.incrementAndGet();
 			boolean is0xA5 = data==DATA_BEGIN;
 			boolean is0xAE = data==DATA_END;
+			if(vaildateCount.get()==1){ //读取消息是否成功标识
+				vaildateCount.set(2);
+				code = data;
+			}
 			if(data==(byte)0xE8 || data==(byte)0x68){ // 0xE8 0x68
 				isHeartPackage = false;
 				indexPackageType = packageCount.get();
+			}else if(data==DATA_CONVERT_0X7B && vaildateCount.get()==0){ //回复消息,只判断第一个
+				vaildateCount.set(1);
 			}
 			if(isReady && is0xA5) {//数据开头
 				checkDataAndReset(baos);
@@ -130,6 +141,8 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 						cardDeviceId= Arrays.copyOfRange(datas, 1, indexPackageType - 1);
 						controlCardId = new String(cardDeviceId);
 						cmd = PackDataUtils.binaryTransCmd(datas,cardDeviceId,datagramPacket);
+						cmd.setCode(code==0);
+						IOUtils.logWrite(1,cmd,logger);
 					}
 				}
 
@@ -138,7 +151,7 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 				//System.out.println("sender "+sender+" recipient "+recipient);
 
 				if(null!=cmd) { //写数据
-					LoggerUtils.writeOutLog(1,cmd,logger);
+					//LoggerUtils.writeOutLog(1,cmd,logger);
 					ctx.fireChannelRead(cmd);; //调用发送
 				}
 				//完整的数据包...
@@ -171,6 +184,7 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 		baos.reset();//重置...
 		isHeartPackage = true; //还原标识信息,假设是心跳包...
 		packageCount.set(0);
+		vaildateCount.set(0);
 	}
 	
 	/**
@@ -191,7 +205,7 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 	 */
 	protected int transCoding(ByteBuf in,byte data,ByteArrayOutputStream baos) {
 		if(DATA_NEED==data || escapeByte.get()) {//转码
-			logger.info("转码,hex:{}",Integer.toHexString(data));
+			logger.info("转码,hex:{}",PackDataUtils.byteToHexString(data));
 			if(in.isReadable()) {
 				escapeByte.set(false);
 				if(DATA_NEED==data){

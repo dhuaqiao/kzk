@@ -2,7 +2,7 @@ package com.led.netty.codec;
 
 import com.led.netty.pojo.CommonCommand;
 import com.led.netty.pojo.HeartBeatCommand;
-import com.led.netty.utils.LoggerUtils;
+import com.led.netty.utils.IOUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
@@ -10,6 +10,7 @@ import io.netty.channel.socket.DatagramPacket;
 import io.netty.handler.codec.MessageToMessageEncoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 
@@ -18,6 +19,7 @@ import java.util.List;
  * @author Administrator
  *
  */
+@Component
 public class HardWareUdpEncoder extends MessageToMessageEncoder<Object> {
 
 	private static final Logger logger = LoggerFactory.getLogger(HardWareUdpEncoder.class);
@@ -29,13 +31,13 @@ public class HardWareUdpEncoder extends MessageToMessageEncoder<Object> {
 			ByteBuf buf = Unpooled.copiedBuffer(cmd.getDataBinary());
 			DatagramPacket datagramPacket = new DatagramPacket(buf,cmd.getDatagramPacket().sender());
 			out.add(datagramPacket);
-			LoggerUtils.writeOutLog(2,cmd,logger);
+			IOUtils.logWrite(2,cmd,logger);
 		}else if(msg instanceof CommonCommand){
 			CommonCommand cmd = (CommonCommand)msg;
 			ByteBuf buf = Unpooled.copiedBuffer(cmd.getDataBinary());
 			DatagramPacket datagramPacket = new DatagramPacket(buf,cmd.getDatagramPacket().sender());
 			out.add(datagramPacket);
-			LoggerUtils.writeOutLog(2,cmd,logger);
+			IOUtils.logWrite(2,cmd,logger);
 		}else{
 			logger.error("unkonw cmd ...{}",msg);
 		}

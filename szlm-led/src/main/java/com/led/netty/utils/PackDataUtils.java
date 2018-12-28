@@ -361,6 +361,76 @@ public class PackDataUtils {
 	}
 
 	/**
+	 * 删除节目：CC=0x84: items为空或者{} 则删除全部 否则则删除指定的节目号
+	 * @param cardDeviceId 设备控制卡
+	 * @param items 节目号集合
+	 * @return
+	 */
+	public static byte[] packDeleteItem(byte[] cardDeviceId,int... items){
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();ByteArrayOutputStream bosCc = new ByteArrayOutputStream()){
+			bos.write(0xA5);
+			int cardIdLength = 0;
+			if(Objects.nonNull(cardDeviceId)){//设置控制卡id
+				bos.write(cardDeviceId);
+				cardIdLength = cardDeviceId.length;
+			}
+			bos.write(0x68);
+			bos.write(0x32);
+			bos.write(0x01);
+			bos.write(0x7B);
+			bos.write(0x01);//1表示要接收返回值 0表示不要
+			bosCc.write(0x84); //CMD
+			if(null==items || items.length==0){
+				bosCc.write(0x00);//删除全部
+			}else{
+				bosCc.write(0x01); //删除指定
+				bosCc.write(items.length);
+				for(int i=0;i<items.length;i++){
+					bosCc.write(items[i]);
+				}
+			}
+			byte[] textBinary = bosCc.toByteArray();
+			byte[] dataText = PackDataUtils.intToByteArray(textBinary.length);
+			bos.write(dataText[0]);
+			bos.write(dataText[1]);
+			bos.write(0x00);
+			bos.write(0x00);
+			bos.write(textBinary);
+			byte[] cd =  bos.toByteArray();
+			byte[] jym = new byte[cd.length - 1-cardIdLength];// 校验码
+			System.arraycopy(cd, 1+cardIdLength, jym, 0, jym.length);
+			int crc = PackDataUtils.calculationCRC(jym);// 校验码
+			byte[] data = PackDataUtils.intToByteArray(crc);// 得到低位字节数组
+			byte[] destData = new byte[cd.length + 3];
+			System.arraycopy(cd, 0, destData, 0, cd.length);
+			destData[destData.length - 3] = data[0];// 低位数值
+			destData[destData.length - 2] = data[1];// 高位
+			destData[destData.length - 1] = (byte) 0xAE;// 固定值
+			bos.reset();
+			bos.write(0xa5);
+			for (int j = 1; j < destData.length - 1; j++) {
+				if (destData[j] == -91) {
+					bos.write(0xaa);
+					bos.write(0x05);
+				} else if (destData[j] == -82) {
+					bos.write(0xaa);
+					bos.write(0x0e);
+				} else if (destData[j] == -86) {
+					bos.write(0xaa);
+					bos.write(0x0a);
+				} else {
+					bos.write(destData[j]);
+				}
+			}
+			bos.write(0xae);
+			return bos.toByteArray();
+		} catch (Exception e) {
+			logger.error("packDeleteItem :{}",e);
+			return null;
+		}
+	}
+
+	/**
 	 *  打包 带有标题 内容 结尾的样式
 	 * @param width
 	 * @param height
@@ -377,6 +447,7 @@ public class PackDataUtils {
 	public static List<byte[]> packSubcontract(int width, int height, int xh,int font, int time, int sd, int hy, String title,String content, String inscribed) {
 		logger.info(("设备宽度：{} 设备高度：{} 节目序号为：{}"), new Object[] { width, height, xh });
 		Charset GB18030 = Charset.forName("GB18030");
+		List<byte[]> packList = new CopyOnWriteArrayList<byte[]>();
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()){
 			StringBuilder builderText = new StringBuilder();
 			if(title!=null && !"".equals(title.trim())){
@@ -430,7 +501,7 @@ public class PackDataUtils {
 			bos.write(0x00);// 窗口偏移，固定
 			bos.write(0x00);// 窗口偏移，固定
 			bos.write(0x00);// 窗口偏移，固定
-			List<byte[]> packList = new CopyOnWriteArrayList<byte[]>();
+
 			//定义包的大小
 			//int sizeData = 800;
 			int sizeData = 300;
@@ -456,7 +527,7 @@ public class PackDataUtils {
 			return packList;
 		} catch (Exception e) {
 			logger.error("组装数据包出错:{}", e);
-			return null;
+			return packList;
 		}
 	}
 
@@ -767,35 +838,35 @@ public class PackDataUtils {
 	 * @return
 	 */
 	public static int calculationCRC(byte[] data) {
-		int total = 0;
+		int sum = 0;
 		for (int d : data) {
-			if (d < 0) total += 256; //转换为正数
-			total += d;
+			if (d < 0) sum += 256; //转换为正数
+			sum += d;
 		}
-		return total;
+		return sum;
 	}
 
 	/**
 	 * 高位转换成低位
 	 * 将int数值转换为占四个字节的byte数组，本方法适用于(高位在前，低位在后)的顺序
-	 * @param n
+	 * @param val
 	 * @return
 	 */
-	public static byte[] intToByteArray(int n) {
-		byte[] b = new byte[4];
-		b[0] = (byte) (n & 0xff);
-		b[1] = (byte) (n >> 8 & 0xff);
-		b[2] = (byte) (n >> 16 & 0xff);
-		b[3] = (byte) (n >> 24 & 0xff);
-		return b;
+	public static byte[] intToByteArray(int val) {
+		byte[] data = new byte[4];
+		data[0] = (byte) (val & 0xff);
+		data[1] = (byte) (val >> 8 & 0xff);
+		data[2] = (byte) (val >> 16 & 0xff);
+		data[3] = (byte) (val >> 24 & 0xff);
+		return data;
 	}
 
 	public static String byteToHexString(byte b){
-		String s = Integer.toHexString(b & 0xFF).toUpperCase();
-		if (s.length() == 1){
-			return "0" + s;
+		String hex = Integer.toHexString(b & 0xFF).toUpperCase();
+		if (hex.length() == 1){
+			return "0" + hex;
 		}else{
-			return s;
+			return hex;
 		}
 	}
 

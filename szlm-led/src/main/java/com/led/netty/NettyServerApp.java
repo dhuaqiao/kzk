@@ -16,9 +16,6 @@ public class NettyServerApp {
 	//明白这一点很重要，这里Log4j有一个规则：假设设置了级别为P，如果发生了一个级别Q比P高，则可以启动，否则屏蔽掉。
 	public static void main(String[] args) {
 		/***/
-
-		System.out.println(PackDataUtils.byteToHexString((byte)1));;
-
 		SpringApplication app = new SpringApplication(Initializer.class);
 		app.setWebApplicationType(WebApplicationType.NONE);
 		app.setRegisterShutdownHook(true);

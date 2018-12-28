@@ -7,14 +7,21 @@ import io.netty.channel.socket.DatagramPacket;
  */
 public class CommonCommand {
 	//原始数据
-	private byte[] dataBinary;
+	private byte[] dataBinary = {};
 	//原始数据
-	private byte[] dataCardId;
+	private byte[] dataCardId = {};
 	//UDP DatagramPacket
 	private DatagramPacket datagramPacket;
+	//标识
+	private boolean code;
 
 	public CommonCommand(){
 
+	}
+
+	public CommonCommand(byte[] dataBinary, byte[] dataCardId){
+		this.dataBinary = dataBinary;
+		this.dataCardId = dataCardId;
 	}
 
 	public CommonCommand(byte[] dataBinary, byte[] dataCardId, DatagramPacket datagramPacket){
@@ -23,6 +30,13 @@ public class CommonCommand {
 		this.datagramPacket = datagramPacket;
 	}
 
+	public boolean getCode() {
+		return code;
+	}
+
+	public void setCode(boolean code) {
+		this.code = code;
+	}
 
 	public byte[] getDataBinary() {
 		return dataBinary;
