@@ -24,7 +24,7 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 	private static final Logger logger = LoggerFactory.getLogger(HardWareUdpHandler.class);
 
 	//存取CMD集合 -- 控制卡ID-CMD
-	private  Map<String,UdpClient> mapItems = new ConcurrentHashMap<>();
+	private  Map<Long,UdpClient> mapCardUdpClient = new ConcurrentHashMap<>();
 
 	private volatile boolean isRunCheckUdpClient = true;
 
@@ -39,12 +39,12 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 			public void run() {
 				while (isRunCheckUdpClient){
 					try {
-						if(mapItems.size()>0){
+						if(mapCardUdpClient.size()>0){
 							long nowSystem = System.currentTimeMillis();
-							mapItems.forEach((c,k)->{
+							mapCardUdpClient.forEach((c, k)->{
 								if(TimeUnit.MILLISECONDS.toSeconds(nowSystem-k.getUnixTimeStamp())>=TIME_OUT){//c
 									logger.info("Client超时,Key:{}",k.getCardId());
-									mapItems.remove(c,k); //remove
+									mapCardUdpClient.remove(c,k); //remove
 								}
 							});
 						}
@@ -67,14 +67,14 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 	protected void channelRead0(ChannelHandlerContext ctx,Object msg) throws Exception { // (1)
 		if(!(msg instanceof  CommonCommand)) return; //不是指定的数据包
 		CommonCommand cmd = (CommonCommand)msg;
-		byte[] cardId = cmd.getDataCardId();
-		String key = new String(cardId);
-		UdpClient udpClient = mapItems.get(key);
+		byte[] cardIdBinary = cmd.getDataCardId();
+		Long keyCardId = Long.parseLong(new String(cardIdBinary));
+		UdpClient udpClient = mapCardUdpClient.get(keyCardId);
 		if(null==udpClient){
 			udpClient = new UdpClient();
-			udpClient.setCardId(key);
-			udpClient.setCardIdBinary(cardId);
-			mapItems.put(key,udpClient);
+			udpClient.setCardId(keyCardId);
+			udpClient.setCardIdBinary(cardIdBinary);
+			mapCardUdpClient.put(keyCardId,udpClient);
 		}
 		//更新时间戳
 		udpClient.setUnixTimeStamp(System.currentTimeMillis());
@@ -82,15 +82,12 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 		if(msg instanceof HeartBeatCommand) {
 			if(cmds.isEmpty() && udpClient.isInit()){
 				udpClient.setInit(false);
-				//_testSendCmd(ctx, cmd, cardId, cmds);
+				sendTemplateAndStepIntoCmd(keyCardId,256,32);
+				sendContentCmd(keyCardId,256,32,1,4,1,6,"北斗三号基本系统完成建设，于今日开始提供全球服务。这标志着北斗系统服务范围由区域扩展为全球，北斗系统正式迈入全球时代。");
+				sendContentCmd(keyCardId,256,32,2,4,1,8,"公安部新规：民警依法履职致公民权益受损，个人不担法律责任。");
+				sendContentCmd(keyCardId,256,32,3,4,1,14,"特朗普威胁国会：若得不到建墙拨款，将关闭美墨边境。");
 
-				sendCommonCmd(cardId,2);
-				sendCommonCmd(cardId,1);
-
-				sendTemplateAndStepIntoCmd(cardId,256,32);
-
-				sendContentCmd(cardId,256,32,1,4,1,6,"北斗三号基本系统完成建设，于今日开始提供全球服务。这标志着北斗系统服务范围由区域扩展为全球，北斗系统正式迈入全球时代。");
-
+				System.out.println("cmd's Size "+udpClient.getCmds().size());
 			}else{
 				ctx.writeAndFlush(msg); //发送心跳包
 				writeCmdToCard(ctx, cmd, udpClient);
@@ -108,13 +105,12 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 	 */
 	private void writeCmdToCard(ChannelHandlerContext ctx, CommonCommand cmd, UdpClient udpClient) {
 		Queue<CommonCommand> cmdItems = udpClient.getCmds();
-		if (null != cmdItems) {
-			CommonCommand cmdItem = cmdItems.poll();
-			if (cmdItem != null) {
-				cmdItem.setDatagramPacket(cmd.getDatagramPacket());
-				ChannelFuture channelFuture = ctx.writeAndFlush(cmdItem);
-				//if(channelFuture.isSuccess()){}
-			}
+		System.out.println("writeCmdToCard cmd's Size "+cmdItems.size());
+		CommonCommand cmdItem = cmdItems.poll();
+		if (cmdItem != null) {
+			cmdItem.setDatagramPacket(cmd.getDatagramPacket());
+			ChannelFuture channelFuture = ctx.writeAndFlush(cmdItem);
+			//if(channelFuture.isSuccess()){}
 		}
 	}
 
@@ -127,30 +123,30 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 
 	/**
 	 * @param type 1 开机 2 关机 3 重启APP 4 硬件重启
-	 * @param cardDeviceId 控制卡ID数组
+	 * @param keyCardId 控制卡ID
 	 * @return true 加入队列成功 false 控制卡不在线
 	 */
-	public boolean sendCommonCmd(byte[] cardDeviceId,int type){
-		String key = new String(cardDeviceId);
-		UdpClient udpClient = mapItems.get(key);
+	public boolean sendCommonCmd(long keyCardId,int type){
+		UdpClient udpClient = mapCardUdpClient.get(keyCardId);
 		if(udpClient!=null){
+			byte[] cardIdBinary = udpClient.getCardIdBinary();
 			byte[] data = null;
 			switch (type){
 				case 1:
-					data = PackDataUtils.packOpenCmdByCardDeviceId(cardDeviceId);
+					data = PackDataUtils.packOpenCmdByCardDeviceId(cardIdBinary);
 					break;
 				case 2:
-					data = PackDataUtils.packCloseCmdByCardDeviceId(cardDeviceId);
+					data = PackDataUtils.packCloseCmdByCardDeviceId(cardIdBinary);
 					break;
 				case 3:
-					data = PackDataUtils.packRestartAppCmdByCardDeviceId(cardDeviceId);
+					data = PackDataUtils.packRestartAppCmdByCardDeviceId(cardIdBinary);
 					break;
 				case 4:
-					data = PackDataUtils.packRestartHardWareCmdByCardDeviceId(cardDeviceId);
+					data = PackDataUtils.packRestartHardWareCmdByCardDeviceId(cardIdBinary);
 					break;
 			}
 			if(null!=data){
-				CommonCommand cmd = new CommonCommand(data,cardDeviceId);
+				CommonCommand cmd = new CommonCommand(data,cardIdBinary);
 				udpClient.getCmds().add(cmd);
 				return true;
 			}
@@ -161,20 +157,20 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 
 	/**
 	 * 设置模版并进入模版方式
-	 * @param cardDeviceId 控制卡id
+	 * @param keyCardId 控制卡id
 	 * @param width 屏幕宽度
 	 * @param height 屏幕高度
 	 * @return
 	 */
-	public boolean sendTemplateAndStepIntoCmd(byte[] cardDeviceId,int width,int height){
-		String key = new String(cardDeviceId);
-		UdpClient udpClient = mapItems.get(key);
+	public boolean sendTemplateAndStepIntoCmd(long keyCardId,int width,int height){
+		UdpClient udpClient = mapCardUdpClient.get(keyCardId);
 		if(udpClient!=null){
-			byte[] data = PackDataUtils.setTemplate(width,height,cardDeviceId);
-			CommonCommand cmd = new CommonCommand(data,cardDeviceId);
+			byte[] cardIdBinary = udpClient.getCardIdBinary();
+			byte[] data = PackDataUtils.setTemplate(width,height,cardIdBinary);
+			CommonCommand cmd = new CommonCommand(data,cardIdBinary);
 			udpClient.getCmds().add(cmd);
-			data = PackDataUtils.stepIntoTemplate(cardDeviceId);
-			cmd = new CommonCommand(data,cardDeviceId);
+			data = PackDataUtils.stepIntoTemplate(cardIdBinary);
+			cmd = new CommonCommand(data,cardIdBinary);
 			udpClient.getCmds().add(cmd);
 			return true;
 		}
@@ -183,7 +179,7 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 
 	/**
 	 * 发送文本数据
-	 * @param cardDeviceId 控制卡id
+	 * @param keyCardId 控制卡id
 	 * @param width 宽度
 	 * @param height 高度
 	 * @param xh 节目号 (1-10)
@@ -193,21 +189,30 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 	 * @param content 内容
 	 * @return
 	 */
-	public boolean sendContentCmd(byte[] cardDeviceId,int width,int height,int xh,int font,int time,int hy,String content){
-		String key = new String(cardDeviceId);
-		UdpClient udpClient = mapItems.get(key);
+	public boolean sendContentCmd(long keyCardId,int width,int height,int xh,int font,int time,int hy,String content){
+		UdpClient udpClient = mapCardUdpClient.get(keyCardId);
 		if(udpClient!=null){
+			byte[] cardIdBinary = udpClient.getCardIdBinary();
 			List<byte[]> datas = PackDataUtils.packSubcontract(width,height,xh,font,time,0,hy,content);
 			//内容
 			datas.forEach(data->{
 				//加入设备id
-				byte[] binaryData = PackDataUtils.packDataAddCardDeviceId(cardDeviceId,data);
-				CommonCommand cmd = new CommonCommand(binaryData,cardDeviceId);
+				byte[] binaryData = PackDataUtils.packDataAddCardDeviceId(cardIdBinary,data);
+				CommonCommand cmd = new CommonCommand(binaryData,cardIdBinary);
 				udpClient.getCmds().add(cmd);
 			});
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * 检查控制卡是否在线
+	 * @param keyCardId 控制卡id
+	 * @return true 在线 false 不在线
+	 */
+	public boolean checkOnLine(Long keyCardId){
+		return mapCardUdpClient.containsKey(keyCardId);
 	}
 
 

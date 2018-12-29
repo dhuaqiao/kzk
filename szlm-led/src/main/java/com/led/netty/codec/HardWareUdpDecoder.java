@@ -142,7 +142,7 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 						controlCardId = new String(cardDeviceId);
 						cmd = PackDataUtils.binaryTransCmd(datas,cardDeviceId,datagramPacket);
 						cmd.setCode(code==0);
-						IOUtils.logWrite(1,cmd,logger);
+
 					}
 				}
 
@@ -152,6 +152,7 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder implements java.io.
 
 				if(null!=cmd) { //写数据
 					//LoggerUtils.writeOutLog(1,cmd,logger);
+					IOUtils.logWrite(1,cmd,logger);
 					ctx.fireChannelRead(cmd);; //调用发送
 				}
 				//完整的数据包...

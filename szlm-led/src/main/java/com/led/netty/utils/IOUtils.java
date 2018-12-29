@@ -49,6 +49,6 @@ public class IOUtils {
             _builder.append(msg.charAt(i));
         }
         String info = _builder.toString();
-        logger.info("{}:cardId:{},info:{}",1==type ? "Recipient 控制卡标识:"+cmd.getCode() : "Sender", cardId,info);
+        logger.info("{}:cardId:{},info:{}",1==type ? "Recipient 控制卡标识:"+cmd.getCode() : 2==type ? "Sender" : "Other", cardId,info);
     }
 }

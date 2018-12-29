@@ -10,7 +10,7 @@ public class UdpClient {
     //cardId Binary
     private byte[] cardIdBinary;
     //CardId
-    private String cardId;
+    private Long cardId;
     //存取CMD
     private Queue<CommonCommand> cmds = new LinkedBlockingDeque<CommonCommand>(100);
     //记录时间戳
@@ -34,11 +34,11 @@ public class UdpClient {
         this.cardIdBinary = cardIdBinary;
     }
 
-    public String getCardId() {
+    public Long getCardId() {
         return cardId;
     }
 
-    public void setCardId(String cardId) {
+    public void setCardId(Long cardId) {
         this.cardId = cardId;
     }
 

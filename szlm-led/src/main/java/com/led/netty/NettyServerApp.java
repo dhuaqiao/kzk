@@ -2,6 +2,7 @@ package com.led.netty;
 
 import com.led.netty.config.NettyUdpServerConfig;
 import com.led.netty.utils.PackDataUtils;
+import io.netty.buffer.ByteBufUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
@@ -14,6 +15,10 @@ public class NettyServerApp {
 
 	public static void main(String[] args) {
 		/***/
+
+		System.out.println(new String(ByteBufUtil.decodeHexDump("303030303031")));
+
+
 		SpringApplication app = new SpringApplication(Initializer.class);
 		app.setWebApplicationType(WebApplicationType.NONE);
 		app.setRegisterShutdownHook(true);

@@ -10,6 +10,8 @@ public class CommonCommand {
 	private byte[] dataBinary = {};
 	//原始数据
 	private byte[] dataCardId = {};
+	//carId
+	private Integer cardId;
 	//UDP DatagramPacket
 	private DatagramPacket datagramPacket;
 	//标识
@@ -28,6 +30,14 @@ public class CommonCommand {
 		this.dataBinary = dataBinary;
 		this.dataCardId = dataCardId;
 		this.datagramPacket = datagramPacket;
+	}
+
+	public Integer getCardId() {
+		return cardId;
+	}
+
+	public void setCardId(Integer cardId) {
+		this.cardId = cardId;
 	}
 
 	public boolean getCode() {
