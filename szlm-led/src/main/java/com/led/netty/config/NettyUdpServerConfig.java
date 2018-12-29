@@ -1,6 +1,7 @@
 package com.led.netty.config;
 
 
+import com.led.netty.handler.HardWareUdpHandler;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelOption;
@@ -61,6 +62,7 @@ public class NettyUdpServerConfig {
 
 	public void stop() {
 		logger.info("destroy udp server resources");
+		HardWareUdpHandler.isRunCheckUdpClient = false;//stop check...
 		if (null == channelLocal) {
 			logger.error("server channel is null");
 		}

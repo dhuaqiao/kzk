@@ -26,7 +26,7 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 	//存取CMD集合 -- 控制卡ID-CMD
 	private  Map<Long,UdpClient> mapCardUdpClient = new ConcurrentHashMap<>();
 
-	private volatile boolean isRunCheckUdpClient = true;
+	public static volatile boolean isRunCheckUdpClient = true;
 
 	//超时时间 单位s
 	private volatile Integer TIME_OUT = 60;
