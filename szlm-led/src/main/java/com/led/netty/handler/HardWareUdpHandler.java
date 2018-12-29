@@ -68,7 +68,12 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 		if(!(msg instanceof  CommonCommand)) return; //不是指定的数据包
 		CommonCommand cmd = (CommonCommand)msg;
 		byte[] cardIdBinary = cmd.getDataCardId();
-		Long keyCardId = Long.parseLong(new String(cardIdBinary));
+		Long keyCardId = null;
+		try{
+			keyCardId = Long.parseLong(new String(cardIdBinary));
+		}catch (Exception e){
+			throw new IllegalArgumentException("设备控制卡ID错误,不是数字...",e);
+		}
 		UdpClient udpClient = mapCardUdpClient.get(keyCardId);
 		if(null==udpClient){
 			udpClient = new UdpClient();
@@ -80,14 +85,25 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 		udpClient.setUnixTimeStamp(System.currentTimeMillis());
 		final Queue<CommonCommand> cmds = udpClient.getCmds();
 		if(msg instanceof HeartBeatCommand) {
-			if(cmds.isEmpty() && udpClient.isInit()){
+			if(udpClient.isInit()){
 				udpClient.setInit(false);
+				//此CMD 必须先发送...
 				sendTemplateAndStepIntoCmd(keyCardId,256,32);
+
+				//节目1
 				sendContentCmd(keyCardId,256,32,1,4,1,6,"北斗三号基本系统完成建设，于今日开始提供全球服务。这标志着北斗系统服务范围由区域扩展为全球，北斗系统正式迈入全球时代。");
+				//节目2
 				sendContentCmd(keyCardId,256,32,2,4,1,8,"公安部新规：民警依法履职致公民权益受损，个人不担法律责任。");
+				//节目3
 				sendContentCmd(keyCardId,256,32,3,4,1,14,"特朗普威胁国会：若得不到建墙拨款，将关闭美墨边境。");
 
-				System.out.println("cmd's Size "+udpClient.getCmds().size());
+				//删除序号为1在节目
+				//sendDeleteItemCmd(keyCardId,1);
+				//删除序号为1,2,3在节目
+				//sendDeleteItemCmd(keyCardId,new int[]{1,2,3});
+				//删除全部
+				//sendDeleteItemCmd(keyCardId);
+
 			}else{
 				ctx.writeAndFlush(msg); //发送心跳包
 				writeCmdToCard(ctx, cmd, udpClient);
@@ -105,7 +121,7 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 	 */
 	private void writeCmdToCard(ChannelHandlerContext ctx, CommonCommand cmd, UdpClient udpClient) {
 		Queue<CommonCommand> cmdItems = udpClient.getCmds();
-		System.out.println("writeCmdToCard cmd's Size "+cmdItems.size());
+		if(cmdItems.isEmpty()) return;
 		CommonCommand cmdItem = cmdItems.poll();
 		if (cmdItem != null) {
 			cmdItem.setDatagramPacket(cmd.getDatagramPacket());
@@ -117,7 +133,7 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause)throws Exception {
-		logger.error("Handler ex:{}",cause);
+		logger.error("Handler ex:{}",cause.toString());
 	}
 
 
@@ -147,8 +163,7 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 			}
 			if(null!=data){
 				CommonCommand cmd = new CommonCommand(data,cardIdBinary);
-				udpClient.getCmds().add(cmd);
-				return true;
+				return udpClient.getCmds().offer(cmd);
 			}
 			return false;
 		}
@@ -160,19 +175,31 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 	 * @param keyCardId 控制卡id
 	 * @param width 屏幕宽度
 	 * @param height 屏幕高度
-	 * @return
+	 * @return true 加入队列成功 false 加入失败
 	 */
 	public boolean sendTemplateAndStepIntoCmd(long keyCardId,int width,int height){
 		UdpClient udpClient = mapCardUdpClient.get(keyCardId);
+		/**
+		 * if(udpClient!=null){
+		 * 			byte[] cardIdBinary = udpClient.getCardIdBinary();
+		 * 			byte[] dataSetTemplate = PackDataUtils.setTemplate(width,height,cardIdBinary);
+		 * 			CommonCommand cmd = new CommonCommand(data,cardIdBinary);
+		 * 			udpClient.getCmds().add(cmd);
+		 * 			data = PackDataUtils.stepIntoTemplate(cardIdBinary);
+		 * 			cmd = new CommonCommand(data,cardIdBinary);
+		 * 			udpClient.getCmds().add(cmd);
+		 * 			return true;
+		 * }
+		 */
 		if(udpClient!=null){
 			byte[] cardIdBinary = udpClient.getCardIdBinary();
-			byte[] data = PackDataUtils.setTemplate(width,height,cardIdBinary);
-			CommonCommand cmd = new CommonCommand(data,cardIdBinary);
-			udpClient.getCmds().add(cmd);
-			data = PackDataUtils.stepIntoTemplate(cardIdBinary);
-			cmd = new CommonCommand(data,cardIdBinary);
-			udpClient.getCmds().add(cmd);
-			return true;
+			byte[] dataSetTemplate = PackDataUtils.setTemplate(width,height,cardIdBinary);
+			byte[] dataStepInto = PackDataUtils.stepIntoTemplate(cardIdBinary);
+			byte[] newDataBinary = new byte[dataSetTemplate.length+dataStepInto.length];
+			System.arraycopy(dataSetTemplate, 0, newDataBinary, 0, dataSetTemplate.length);
+			System.arraycopy(dataStepInto, 0, newDataBinary, dataSetTemplate.length, dataStepInto.length);
+			CommonCommand cmd = new CommonCommand(newDataBinary,cardIdBinary);
+			return udpClient.getCmds().offer(cmd);
 		}
 		return false;
 	}
@@ -187,22 +214,42 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 	 * @param time 时间 参考 默认填写1
 	 * @param hy 样式 (0 立即显示 6 左移 7 右移 8	上移 9	下移  10	向上滚动  11	向左滚动 12	向右滚动) 参考 《显示特效编码》
 	 * @param content 内容
-	 * @return
+	 * @return true 加入队列成功 false 加入失败
 	 */
 	public boolean sendContentCmd(long keyCardId,int width,int height,int xh,int font,int time,int hy,String content){
 		UdpClient udpClient = mapCardUdpClient.get(keyCardId);
 		if(udpClient!=null){
 			byte[] cardIdBinary = udpClient.getCardIdBinary();
-			List<byte[]> datas = PackDataUtils.packSubcontract(width,height,xh,font,time,0,hy,content);
+			List<byte[]> items = PackDataUtils.packSubcontract(width,height,xh,font,time,0,hy,content);
+			//remainingCapacity
+			if(udpClient.getCmds().remainingCapacity()<items.size()) throw new IllegalArgumentException("队列容量已经超过上线");
 			//内容
-			datas.forEach(data->{
+			items.forEach(data->{
 				//加入设备id
 				byte[] binaryData = PackDataUtils.packDataAddCardDeviceId(cardIdBinary,data);
 				CommonCommand cmd = new CommonCommand(binaryData,cardIdBinary);
-				udpClient.getCmds().add(cmd);
+				udpClient.getCmds().offer(cmd);
 			});
 			return true;
 		}
+		return false;
+	}
+
+	/**
+	 * 删除节目,删除全部相当于清屏
+	 * @param keyCardId 控制卡id
+	 * @param itemNos 节目序号数组 如果为空 则删除全部
+	 * @return true 加入队列成功 false 加入失败
+	 */
+	public boolean sendDeleteItemCmd(long keyCardId,int...itemNos){
+		UdpClient udpClient = mapCardUdpClient.get(keyCardId);
+		if(null!=udpClient){
+			byte[] cardIdBinary = udpClient.getCardIdBinary();
+			byte[] binaryData = PackDataUtils.packDeleteItem(cardIdBinary,itemNos);
+			CommonCommand cmd = new CommonCommand(binaryData,cardIdBinary);
+			return udpClient.getCmds().offer(cmd);
+		}
+
 		return false;
 	}
 

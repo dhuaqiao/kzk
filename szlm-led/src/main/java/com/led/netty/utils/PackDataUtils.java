@@ -408,20 +408,7 @@ public class PackDataUtils {
 			destData[destData.length - 1] = (byte) 0xAE;// 固定值
 			bos.reset();
 			bos.write(0xa5);
-			for (int j = 1; j < destData.length - 1; j++) {
-				if (destData[j] == -91) {
-					bos.write(0xaa);
-					bos.write(0x05);
-				} else if (destData[j] == -82) {
-					bos.write(0xaa);
-					bos.write(0x0e);
-				} else if (destData[j] == -86) {
-					bos.write(0xaa);
-					bos.write(0x0a);
-				} else {
-					bos.write(destData[j]);
-				}
-			}
+			transcoding(bos, destData);
 			bos.write(0xae);
 			return bos.toByteArray();
 		} catch (Exception e) {
@@ -469,10 +456,7 @@ public class PackDataUtils {
 			bos.write(0x00);// 保留，固定
 			bos.write(0x00);// 保留，固定
 			bos.write(0x00);// 保留，固定
-			bos.write(0x01);// 窗口数据，这里只分一个窗口，固定
-			//窗口信息表数据
-			//附录1：窗口位置及属性
-			//窗口起点X。高字节在前
+			bos.write(0x01);// 窗口数据
 			bos.write(0x00);// 窗口起始坐标点，固定
 			bos.write(0x00);// 窗口起始坐标点，固定
 			//窗口起点Y。高字节在前
@@ -496,15 +480,13 @@ public class PackDataUtils {
 			bos.write(0x00);// 00 03 停留时间/滚动重复
 			bos.write(0x03);// 00 03 停留时间/滚动重复
 			bos.write(0x00);//对齐方式
-			//17~19字节为窗口数据偏移，20~22字节为窗口数据长度。高字节在前。无数据则偏移和长度均为0.
 			//窗口数据偏移
 			bos.write(0x00);// 窗口偏移，固定
 			bos.write(0x00);// 窗口偏移，固定
 			bos.write(0x00);// 窗口偏移，固定
-
 			//定义包的大小
 			//int sizeData = 800;
-			int sizeData = 300;
+			int sizeData = 500;
 			byte[] msgDataInfo = builderText.toString().getBytes(GB18030);
 			byte textBinary[] = intToByteArray(msgDataInfo.length);
 			bos.write(textBinary[2]);
@@ -572,23 +554,7 @@ public class PackDataUtils {
 			byte[] packBinary = bos.toByteArray();
 			bos.reset();
 			bos.write(0xa5);
-			// 0xa5  0xaa 0x05。目的是避免与起始符0xa5相同
-			// 0xae  0xaa 0x0e。目的是避免与结束符0xae相同。
-			// 0xaa  0xaa 0x0a。目的是避免与转义符0xaa相同。
-			for (int j = 1; j < packBinary.length - 1; j++) {
-				if (packBinary[j] == -91) {
-					bos.write(0xaa);
-					bos.write(0x05);
-				} else if (packBinary[j] == -82) {
-					bos.write(0xaa);
-					bos.write(0x0e);
-				} else if (packBinary[j] == -86) {
-					bos.write(0xaa);
-					bos.write(0x0a);
-				} else {
-					bos.write(packBinary[j]);
-				}
-			}
+			transcoding(bos, packBinary);
 			bos.write(0xae);
 			packBinary = bos.toByteArray();
 			packList.add(packBinary);
@@ -798,7 +764,6 @@ public class PackDataUtils {
 			System.arraycopy(cd, 1, jym, 0, jym.length);
 			int crc = PackDataUtils.calculationCRC(jym);// 校验码
 			byte[] data = PackDataUtils.intToByteArray(crc);// 得到低位字节数组
-			//debugData("校验码", data);
 			byte[] destData = new byte[cd.length + 3];
 			System.arraycopy(cd, 0, destData, 0, cd.length);
 			destData[destData.length - 3] = data[0];// 低位数值
@@ -807,28 +772,32 @@ public class PackDataUtils {
 
 			bos.reset();
 			bos.write(0xa5);
-			// 0xa5  0xaa 0x05。目的是避免与起始符0xa5相同
-			// 0xae  0xaa 0x0e。目的是避免与结束符0xae相同。
-			// 0xaa  0xaa 0x0a。目的是避免与转义符0xaa相同。
-			for (int j = 1; j < destData.length - 1; j++) {
-				if (destData[j] == -91) {
-					bos.write(0xaa);
-					bos.write(0x05);
-				} else if (destData[j] == -82) {
-					bos.write(0xaa);
-					bos.write(0x0e);
-				} else if (destData[j] == -86) {
-					bos.write(0xaa);
-					bos.write(0x0a);
-				} else {
-					bos.write(destData[j]);
-				}
-			}
+			transcoding(bos, destData);
 			bos.write(0xae);
 			destData = bos.toByteArray();
 			return destData;
 		}catch (Exception e){
 			return null;
+		}
+	}
+
+	// 0xa5  0xaa 0x05。目的是避免与起始符0xa5相同
+	// 0xae  0xaa 0x0e。目的是避免与结束符0xae相同。
+	// 0xaa  0xaa 0x0a。目的是避免与转义符0xaa相同。
+	private static void transcoding(ByteArrayOutputStream bos, byte[] destData) {
+		for (int j = 1; j < destData.length - 1; j++) {
+			if (destData[j] == -91) {
+				bos.write(0xaa);
+				bos.write(0x05);
+			} else if (destData[j] == -82) {
+				bos.write(0xaa);
+				bos.write(0x0e);
+			} else if (destData[j] == -86) {
+				bos.write(0xaa);
+				bos.write(0x0a);
+			} else {
+				bos.write(destData[j]);
+			}
 		}
 	}
 

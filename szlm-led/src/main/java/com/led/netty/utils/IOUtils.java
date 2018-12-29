@@ -51,4 +51,17 @@ public class IOUtils {
         String info = _builder.toString();
         logger.info("{}:cardId:{},info:{}",1==type ? "Recipient 控制卡标识:"+cmd.getCode() : 2==type ? "Sender" : "Other", cardId,info);
     }
+
+    public static void logWrite(byte[] datas, Logger logger){
+        StringBuilder _builder = new StringBuilder();
+        String msg = ByteBufUtil.hexDump(datas).toUpperCase();
+        for(int i =0;i<msg.length();i++){
+            if(i%2==0) _builder.append(" ");
+            _builder.append(msg.charAt(i));
+        }
+        String info = _builder.toString();
+        logger.info("info:{}",info);
+    }
 }
+
+

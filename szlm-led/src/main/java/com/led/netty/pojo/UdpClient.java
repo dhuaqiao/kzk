@@ -1,6 +1,5 @@
 package com.led.netty.pojo;
 
-import java.util.Queue;
 import java.util.concurrent.LinkedBlockingDeque;
 
 /**
@@ -12,7 +11,7 @@ public class UdpClient {
     //CardId
     private Long cardId;
     //存取CMD
-    private Queue<CommonCommand> cmds = new LinkedBlockingDeque<CommonCommand>(100);
+    private LinkedBlockingDeque<CommonCommand> cmds = new LinkedBlockingDeque<CommonCommand>(100);
     //记录时间戳
     private long unixTimeStamp;
     //
@@ -42,11 +41,11 @@ public class UdpClient {
         this.cardId = cardId;
     }
 
-    public Queue<CommonCommand> getCmds() {
+    public LinkedBlockingDeque<CommonCommand> getCmds() {
         return cmds;
     }
 
-    public void setCmds(Queue<CommonCommand> cmds) {
+    public void setCmds(LinkedBlockingDeque<CommonCommand> cmds) {
         this.cmds = cmds;
     }
 
