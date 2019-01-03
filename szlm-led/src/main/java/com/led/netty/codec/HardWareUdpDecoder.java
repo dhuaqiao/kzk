@@ -3,6 +3,7 @@ package com.led.netty.codec;
 
 import com.led.netty.pojo.CommonCommand;
 import com.led.netty.pojo.HeartBeatCommand;
+import com.led.netty.pojo.QueryStateCommand;
 import com.led.netty.utils.IOUtils;
 import com.led.netty.utils.PackDataUtils;
 import io.netty.buffer.ByteBuf;
@@ -66,8 +67,23 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder{
 			if (indexE8 != -1) {
 				int e8Length = indexE8/2;
 				byte[] cardDeviceId = Arrays.copyOfRange(datas, 1, e8Length);
-				cmd = PackDataUtils.binaryTransCmd(datas, cardDeviceId, datagramPacket);
-				if(datas.length>e8Length+6)cmd.setCode(datas[e8Length+4] == 0);
+				if(datas.length>e8Length+6){
+					System.out.println("datas[e8Length+3]: "+PackDataUtils.byteToHexString(datas[e8Length+3]));
+					if(datas[e8Length+3]==0x76){// 软件开关屏控制
+						cmd = new QueryStateCommand(datas,cardDeviceId,datagramPacket,-1);
+						if(msg.endsWith("0000000000000000009301AE")){//关-屏幕当前状态
+							((QueryStateCommand) cmd).setState(0);
+						}else if(msg.endsWith("0100000000000000009401AE")){//开-屏幕当前状态
+							((QueryStateCommand) cmd).setState(1);
+						}
+					}
+					if(null==cmd){ //其他 //指令回复
+						cmd = PackDataUtils.binaryTransCmd(datas, cardDeviceId, datagramPacket);
+						cmd.setCode(datas[e8Length+4] == 0);
+					}
+				}else{
+					cmd = PackDataUtils.binaryTransCmd(datas, cardDeviceId, datagramPacket);
+				}
 			} else { //心跳
 				byte[] cardDeviceId = Arrays.copyOfRange(datas, 1, datas.length - 2);
 				cmd = new HeartBeatCommand();

@@ -38,6 +38,8 @@ public class HardWareUdpEncoder extends MessageToMessageEncoder<Object> {
 			DatagramPacket datagramPacket = new DatagramPacket(buf,cmd.getDatagramPacket().sender());
 			out.add(datagramPacket);
 			IOUtils.logWrite(2,cmd,logger);
+		}else if(msg instanceof  DatagramPacket){
+			out.add(msg);
 		}else{
 			logger.error("unkonw cmd ...{}",msg);
 		}

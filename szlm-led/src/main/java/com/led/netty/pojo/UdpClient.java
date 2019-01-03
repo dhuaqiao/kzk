@@ -1,5 +1,7 @@
 package com.led.netty.pojo;
 
+import io.netty.channel.ChannelHandlerContext;
+
 import java.util.concurrent.LinkedBlockingDeque;
 
 /**
@@ -16,6 +18,26 @@ public class UdpClient {
     private long unixTimeStamp;
     //
     private boolean isInit = true;
+    //状态
+    private int state = -1;
+
+    private  ChannelHandlerContext ctx;
+
+    public void setCtx(ChannelHandlerContext ctx) {
+        this.ctx = ctx;
+    }
+
+    public ChannelHandlerContext getCtx() {
+        return ctx;
+    }
+
+    public void setState(int state) {
+        this.state = state;
+    }
+
+    public int getState() {
+        return state;
+    }
 
     public void setInit(boolean init) {
         isInit = init;

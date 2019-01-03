@@ -37,6 +37,8 @@ public class PackDataUtils {
 	public final static byte[] PACKAGE_CLEAR_HARDWARE_CMD = {(byte) 0xA5, 0x68, 0x32, 0x01, 0x7B, 0x01, 0x04, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x22, 0x01 , (byte)0xAE};
 	//heart hardware 心跳回复包 A5  91 AE
 	public final static byte[] PACKAGE_HEART_HARDWARE_CMD = {(byte) 0xA5, (byte)0x91, (byte) 0xAE};
+	//查询状态
+	public final static byte[] PACKAGE_QUERY_STATE = {(byte) 0xA5, 0x68,0x32, 0x01, 0x76, 0x01, 0x01, 0x13, 0x01 , (byte) 0xAE};
 	//模版控制方法
 	public final static byte[] PACKAGE_TEMPLDATE_CMD = { (byte) 0xA5, 0x68, 0x32, 0x01, 0x7B, 0x01, 0x02, 0x00, 0x00, 0x00, (byte) 0x82, 0x11, (byte) 0xAC, 0x01, (byte) 0xAE };
 
@@ -54,7 +56,7 @@ public class PackDataUtils {
 
 	/**
 	 * 根据控制卡设备ID 生成开启屏幕指令
-	 * @param deviceId 控制卡id
+	 * @param cardDeviceId 控制卡id
 	 * @return 生成开启屏幕指令
 	 */
 	public static byte[] packOpenCmdByCardDeviceId(byte[] cardDeviceId){
@@ -68,6 +70,26 @@ public class PackDataUtils {
 			return bos.toByteArray();
 		} catch (Exception e) {
 			logger.error("packOpenCmdByCardDeviceId :{}",e);
+			return null;
+		}
+	}
+
+	/**
+	 * 根据控制卡设备ID 生成开启屏幕指令
+	 * @param cardDeviceId 控制卡id
+	 * @return 生成开启屏幕指令
+	 */
+	public static byte[] packQueryCmdByCardDeviceId(byte[] cardDeviceId){
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream(cardDeviceId.length+PACKAGE_QUERY_STATE.length)){
+			bos.write(0xA5);
+			//设置控制卡id
+			if(Objects.nonNull(cardDeviceId)){
+				bos.write(cardDeviceId);
+			}
+			bos.write(PACKAGE_QUERY_STATE,1,PACKAGE_QUERY_STATE.length-1);
+			return bos.toByteArray();
+		} catch (Exception e) {
+			logger.error("packQueryCmdByCardDeviceId :{}",e);
 			return null;
 		}
 	}
@@ -192,6 +214,55 @@ public class PackDataUtils {
 			return null;
 		}
 	}
+
+	/**
+	 * 查询开关屏信息
+	 * @param cardDeviceId 控制卡id
+	 * @return
+	public static byte[] packConfigQueryState(byte[] cardDeviceId) {
+		// a5 68 32 01 76 01 01 13 01 ae
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();ByteArrayOutputStream bosCc = new ByteArrayOutputStream()){
+			bos.write(0xA5);
+			int cardIdLength = 0;
+			if(Objects.nonNull(cardDeviceId)){//设置控制卡id
+				bos.write(cardDeviceId);
+				cardIdLength = cardDeviceId.length;
+			}
+			bos.write(0x68);
+			bos.write(0x32);
+			bos.write(0x01);
+			bos.write(0x7B);
+			bos.write(0x01);//1表示要接收返回值 0表示不要
+			bosCc.write(0x76); //CMD
+			bosCc.write(0x01); //0x01: 查询软件开关屏信息
+			byte[] textBinary = bosCc.toByteArray();
+			byte[] dataCc = PackDataUtils.intToByteArray(textBinary.length);
+			bos.write(dataCc[0]);//包数据长度LL LH
+			bos.write(dataCc[1]);//二字节的长度数，表示后面“CC。。。。。。”内容部分的长度，低字节在前
+			bos.write(0x00);//包序号PO
+			bos.write(0x00);//最末包序号TP
+			bos.write(textBinary);
+			byte[] cd =  bos.toByteArray();
+			byte[] jym = new byte[cd.length - 1-cardIdLength];// 校验码
+			System.arraycopy(cd, 1+cardIdLength, jym, 0, jym.length);
+			int crc = PackDataUtils.calculationCRC(jym);// 校验码
+			byte[] data = PackDataUtils.intToByteArray(crc);// 得到低位字节数组
+			byte[] destData = new byte[cd.length + 3];
+			System.arraycopy(cd, 0, destData, 0, cd.length);
+			destData[destData.length - 3] = data[0];// 低位数值
+			destData[destData.length - 2] = data[1];// 高位
+			destData[destData.length - 1] = (byte) 0xAE;// 固定值
+			bos.reset();
+			bos.write(0xa5);
+			transcoding(bos, destData);
+			bos.write(0xae);
+			return bos.toByteArray();
+		} catch (Exception e) {
+			logger.error("packConfigQueryState :{}",e);
+			return null;
+		}
+	}
+	*/
 
 	/**
 	 * 設置屏幕亮度

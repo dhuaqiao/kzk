@@ -33,10 +33,10 @@ public class NettyServerApp {
 		/**
 		 * 启动
 		 *
-		 * @throws InterruptedException
+		 * @throws Exception
 		 */
 		@PostConstruct
-		public void start() throws InterruptedException {
+		public void start() throws Exception {
 			nettyUdpServerConfig.start();
 		}
 
