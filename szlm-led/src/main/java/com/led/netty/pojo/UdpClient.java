@@ -1,8 +1,15 @@
 package com.led.netty.pojo;
 
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.socket.DatagramPacket;
 
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * UdpClient
@@ -21,7 +28,61 @@ public class UdpClient {
     //状态
     private int state = -1;
 
-    private  ChannelHandlerContext ctx;
+    public BlockingQueue<Integer> stateQueue = new ArrayBlockingQueue<>(1);
+
+    private ChannelHandlerContext ctx;
+
+    private DatagramPacket datagramPacket;
+
+    private volatile Lock lock = new ReentrantLock();
+
+    private volatile Condition condition = lock.newCondition();	//类Condition成员
+
+    private CountDownLatch countDownLatch = new CountDownLatch(1);
+
+    public void lockState() throws InterruptedException{
+        try {
+            System.err.println(Thread.currentThread().getName()+" lockState lock");
+           // lock.lock();
+            System.err.println(Thread.currentThread().getName()+" lockState await");
+            //condition.await();
+            countDownLatch.await();
+
+            synchronized (lock){
+                //lock.wait();
+            }
+            System.err.println(Thread.currentThread().getName()+" lockState println");
+        }finally {
+            System.err.println(Thread.currentThread().getName()+" lockState unlock");
+           // lock.unlock();
+        }
+    }
+
+    public void unLockState(){
+        try {
+            System.err.println(Thread.currentThread().getName()+" unLockState lock");
+            //lock.lock();
+            System.err.println(Thread.currentThread().getName()+" unLockState signal");
+            //condition.signal();//唤醒一个在Condition等待队列中的线程
+            System.err.println(Thread.currentThread().getName()+" unLockState println");
+            synchronized (lock){
+                //lock.notify();
+            }
+            System.out.println(" lock.notifyAll(); ");
+            countDownLatch.countDown();
+        }finally {
+            System.err.println(Thread.currentThread().getName()+" unLockState unlock");
+            //lock.unlock();
+        }
+    }
+
+    public void setDatagramPacket(DatagramPacket datagramPacket) {
+        this.datagramPacket = datagramPacket;
+    }
+
+    public DatagramPacket getDatagramPacket() {
+        return datagramPacket;
+    }
 
     public void setCtx(ChannelHandlerContext ctx) {
         this.ctx = ctx;

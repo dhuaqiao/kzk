@@ -53,16 +53,16 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder{
 		byte[] buffer = new byte[bufferSize];
 		byteBuf.readBytes(buffer);
 		StringBuilder _builder = new StringBuilder();
-		String msgBuffer = ByteBufUtil.hexDump(buffer).toUpperCase();
-		String msgConverter = msgBuffer.substring(0,msgBuffer.length()-6)
+		String infoHexDump = ByteBufUtil.hexDump(buffer).toUpperCase();
+		String msgConverter = infoHexDump.substring(0,infoHexDump.length()-6)
 				.replaceAll("AA05","A5")
 				.replaceAll("AA0E","AE")
 				.replaceAll("AA0A","AA");
-		String msg = _builder.append(msgConverter).append(msgBuffer.substring(msgBuffer.length()-6)).toString();
+		String msg = _builder.append(msgConverter).append(infoHexDump.substring(infoHexDump.length()-6)).toString();
 		CommonCommand cmd = null;
 		byte[] datas = ByteBufUtil.decodeHexDump(msg);
 		IOUtils.logWrite(datas,logger);//日志...
-		if(datas.length>2) {
+		if(datas.length>2 && msg.startsWith("A5") && msg.endsWith("AE")) {
 			int indexE8 = msg.indexOf("E8");
 			if (indexE8 != -1) {
 				int e8Length = indexE8/2;
@@ -70,11 +70,14 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder{
 				if(datas.length>e8Length+6){
 					System.out.println("datas[e8Length+3]: "+PackDataUtils.byteToHexString(datas[e8Length+3]));
 					if(datas[e8Length+3]==0x76){// 软件开关屏控制
-						cmd = new QueryStateCommand(datas,cardDeviceId,datagramPacket,-1);
-						if(msg.endsWith("0000000000000000009301AE")){//关-屏幕当前状态
-							((QueryStateCommand) cmd).setState(0);
-						}else if(msg.endsWith("0100000000000000009401AE")){//开-屏幕当前状态
-							((QueryStateCommand) cmd).setState(1);
+						//A5 33 39 34 36 31 33 E8 32 01 76 01 00 00 00 00 00 00 00 00 94 01 AE
+						//A5 33 39 34 36 31 33 E8 32 01 76 01 01 00 00 00 00 00 00 00 93 01 AE
+						if(msg.endsWith("E83201760100000000000000009401AE")){//关-屏幕当前状态
+							cmd = new QueryStateCommand(datas,cardDeviceId,datagramPacket,0);
+						}else if(msg.endsWith("E83201760101000000000000009301AE")){//开-屏幕当前状态
+							cmd = new QueryStateCommand(datas,cardDeviceId,datagramPacket,1);
+						}else {
+							cmd = new QueryStateCommand(datas,cardDeviceId,datagramPacket,-1);
 						}
 					}
 					if(null==cmd){ //其他 //指令回复
@@ -84,7 +87,7 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder{
 				}else{
 					cmd = PackDataUtils.binaryTransCmd(datas, cardDeviceId, datagramPacket);
 				}
-			} else { //心跳
+			} else{ //心跳
 				byte[] cardDeviceId = Arrays.copyOfRange(datas, 1, datas.length - 2);
 				cmd = new HeartBeatCommand();
 				datas = PackDataUtils.packHeartHardWareCmdByCardDeviceId(cardDeviceId);
@@ -92,6 +95,8 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder{
 				cmd.setDatagramPacket(datagramPacket);
 				cmd.setDataCardId(cardDeviceId);
 			}
+		}else{
+			logger.warn("unknown cmd => {}",new String(datas,"GBK"));
 		}
 		if(null!=cmd) { //写数据
 			IOUtils.logWrite(1,cmd,logger);

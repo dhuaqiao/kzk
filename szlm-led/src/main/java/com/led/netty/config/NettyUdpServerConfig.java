@@ -39,8 +39,6 @@ public class NettyUdpServerConfig {
 	@Autowired
 	private NettyUdpServerInitializer nettyUdpServerInitializer;
 
-	@Autowired
-	private HardWareUdpHandler hardWareUdpHandler;
 
 	/**
 	 * 启动
@@ -55,7 +53,6 @@ public class NettyUdpServerConfig {
 				.option(ChannelOption.SO_BROADCAST, true)
 				.handler(nettyUdpServerInitializer);
 		channelLocal = bootstrap.bind(host, port).sync().channel();
-		hardWareUdpHandler.setChannelLocal(channelLocal);
 		logger.info("info Netty udp server listening on port " + port + " and ready for connections...");
 	}
 

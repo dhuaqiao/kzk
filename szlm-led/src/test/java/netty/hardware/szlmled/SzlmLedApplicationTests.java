@@ -1,6 +1,5 @@
 package netty.hardware.szlmled;
 
-import com.led.netty.pojo.CommonCommand;
 import com.led.netty.utils.PackDataUtils;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
@@ -10,15 +9,14 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.DatagramPacket;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.junit4.SpringRunner;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 
 //@RunWith(SpringRunner.class)
 //@SpringBootTest
@@ -100,6 +98,45 @@ public class SzlmLedApplicationTests {
         workerGroup.shutdownGracefully();
         channel.close();
 
+    }
+
+    public ReentrantLock lock=new ReentrantLock();
+    public Condition condition =lock.newCondition();
+    @Test
+    public void testLockCondition() throws Exception{
+        new Thread(){
+            @Override
+            public void run() {
+                lock.lock();//请求锁
+                try{
+                    System.out.println(Thread.currentThread().getName()+"==》进入等待");
+                    condition.await();//设置当前线程进入等待
+                }catch (InterruptedException e) {
+                    e.printStackTrace();
+                }finally{
+                    lock.unlock();//释放锁
+                }
+                System.out.println(Thread.currentThread().getName()+"==》继续执行");
+            }
+        }.start();
+        new Thread(){
+            @Override
+            public void run() {
+                lock.lock();//请求锁
+                try{
+                    System.out.println(Thread.currentThread().getName()+"=》进入");
+                    Thread.sleep(2000);//休息2秒
+                    condition.signal();//随机唤醒等待队列中的一个线程
+                    System.out.println(Thread.currentThread().getName()+"休息结束");
+                }catch (InterruptedException e) {
+                    e.printStackTrace();
+                }finally{
+                    lock.unlock();//释放锁
+                }
+            }
+        }.start();
+
+        Thread.sleep(5000);
     }
 
 }
