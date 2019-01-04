@@ -61,21 +61,23 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder{
 		String msg = _builder.append(msgConverter).append(infoHexDump.substring(infoHexDump.length()-6)).toString();
 		CommonCommand cmd = null;
 		byte[] datas = ByteBufUtil.decodeHexDump(msg);
-		IOUtils.logWrite(datas,logger);//日志...
+		String netInfo = String.format("sender=%s,recipient=%s",datagramPacket.sender(),datagramPacket.recipient());
+		//IOUtils.logWrite(datas,logger);//日志...
 		if(datas.length>2 && msg.startsWith("A5") && msg.endsWith("AE")) {
 			int indexE8 = msg.indexOf("E8");
 			if (indexE8 != -1) {
 				int e8Length = indexE8/2;
 				byte[] cardDeviceId = Arrays.copyOfRange(datas, 1, e8Length);
 				if(datas.length>e8Length+6){
-					System.out.println("datas[e8Length+3]: "+PackDataUtils.byteToHexString(datas[e8Length+3]));
 					if(datas[e8Length+3]==0x76){// 软件开关屏控制
-						//A5 33 39 34 36 31 33 E8 32 01 76 01 00 00 00 00 00 00 00 00 94 01 AE
-						//A5 33 39 34 36 31 33 E8 32 01 76 01 01 00 00 00 00 00 00 00 93 01 AE
-						if(msg.endsWith("E83201760100000000000000009401AE")){//关-屏幕当前状态
-							cmd = new QueryStateCommand(datas,cardDeviceId,datagramPacket,0);
-						}else if(msg.endsWith("E83201760101000000000000009301AE")){//开-屏幕当前状态
+						if(msg.endsWith("E832017601010100000000000000009401AE")){//开-屏幕当前状态
 							cmd = new QueryStateCommand(datas,cardDeviceId,datagramPacket,1);
+						}else if(msg.endsWith("E832017601010000000000000000009301AE")){//关-屏幕当前状态
+							cmd = new QueryStateCommand(datas,cardDeviceId,datagramPacket,0);
+						}else if(msg.endsWith("E83201760100019301AE")){//开机回复包
+							cmd = new QueryStateCommand(datas,cardDeviceId,datagramPacket,2);
+						}else if(msg.endsWith("E83201760100009201AE")){//关机回复包
+							cmd = new QueryStateCommand(datas,cardDeviceId,datagramPacket,3);
 						}else {
 							cmd = new QueryStateCommand(datas,cardDeviceId,datagramPacket,-1);
 						}
@@ -96,13 +98,11 @@ public class HardWareUdpDecoder extends ByteToMessageDecoder{
 				cmd.setDataCardId(cardDeviceId);
 			}
 		}else{
-			logger.warn("unknown cmd => {}",new String(datas,"GBK"));
+			logger.warn("unknown cmd => data:{} text:{} net:{}",infoHexDump,new String(datas,"GBK"),netInfo);
 		}
 		if(null!=cmd) { //写数据
 			IOUtils.logWrite(1,cmd,logger);
 			ctx.fireChannelRead(cmd);; //调用发送
 		}
 	}
-
-
 }

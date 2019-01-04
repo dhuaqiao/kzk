@@ -39,6 +39,8 @@ public class NettyUdpServerConfig {
 	@Autowired
 	private NettyUdpServerInitializer nettyUdpServerInitializer;
 
+	@Autowired
+	private  HardWareUdpHandler hardWareUdpHandler;
 
 	/**
 	 * 启动
@@ -63,7 +65,7 @@ public class NettyUdpServerConfig {
 
 	public void stop() {
 		logger.info("destroy udp server resources");
-		HardWareUdpHandler.isRunCheckUdpClient = false;//stop check...
+		hardWareUdpHandler.destory();
 		if (null == channelLocal) {
 			logger.error("server channel is null");
 		}

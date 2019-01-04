@@ -2,6 +2,7 @@ package com.led.netty.utils;
 
 import com.led.netty.pojo.CommonCommand;
 import io.netty.buffer.ByteBufUtil;
+import io.netty.channel.socket.DatagramPacket;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -48,6 +49,9 @@ public class IOUtils {
             if(i%2==0) _builder.append(" ");
             _builder.append(msg.charAt(i));
         }
+        //DatagramPacket datagramPacket = cmd.getDatagramPacket();
+        //String netInfo = String.format("sender=%s,recipient=%s",datagramPacket.sender(),datagramPacket.recipient());
+        //_builder.append(netInfo);
         String info = _builder.toString();
         logger.info("{}:cardId:{},info:{}",1==type ? "Recipient 控制卡标识:"+cmd.getCode() : 2==type ? "Sender" : "Other", cardId,info);
     }

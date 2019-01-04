@@ -31,7 +31,7 @@ public class HardWareUdpEncoder extends MessageToMessageEncoder<Object> {
 			ByteBuf buf = Unpooled.copiedBuffer(cmd.getDataBinary());
 			DatagramPacket datagramPacket = new DatagramPacket(buf,cmd.getDatagramPacket().sender());
 			out.add(datagramPacket);
-			IOUtils.logWrite(2,cmd,logger);
+			//IOUtils.logWrite(2,cmd,logger);
 		}else if(msg instanceof CommonCommand){
 			CommonCommand cmd = (CommonCommand)msg;
 			ByteBuf buf = Unpooled.copiedBuffer(cmd.getDataBinary());

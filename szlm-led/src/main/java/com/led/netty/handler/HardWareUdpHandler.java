@@ -8,10 +8,13 @@ import com.led.netty.utils.PackDataUtils;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.util.Attribute;
+import io.netty.util.AttributeKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.Map;
@@ -27,15 +30,16 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 	private  Map<Long,UdpClient> mapCardUdpClient = new ConcurrentHashMap<>();
 
 
-	public static volatile boolean isRunCheckUdpClient = true;
+	public volatile boolean isRunCheckUdpClient = true;
 
 	//超时时间 单位s
 	private volatile Integer TIME_OUT = 60;
 
-	//第一种方式
-	ExecutorService executor = Executors.newCachedThreadPool();
+	//执行器
+	private ExecutorService executor = Executors.newCachedThreadPool();
 
-	public HardWareUdpHandler() {
+	@PostConstruct
+	public void startCheck() {
 		//启动检测UdpClient 守护线程
 		Thread thread = new Thread(){
 			@Override
@@ -46,8 +50,9 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 							long nowSystem = System.currentTimeMillis();
 							mapCardUdpClient.forEach((c, k)->{
 								if(TimeUnit.MILLISECONDS.toSeconds(nowSystem-k.getUnixTimeStamp())>=TIME_OUT){//c
-									logger.info("Client超时,Key:{}",k.getCardId());
-									mapCardUdpClient.remove(c,k); //remove
+									k.getCmds().clear();
+									boolean isRemove = mapCardUdpClient.remove(c,k); //remove
+									logger.info("Client超时,Key:{},isRemove:{}",k.getCardId(),isRemove);
 								}
 							});
 						}
@@ -69,7 +74,6 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 	@Override
 	protected void channelRead0(ChannelHandlerContext ctx,Object msg) throws Exception { // (1)
 		if(!(msg instanceof  CommonCommand)) return; //不是指定的数据包
-		System.out.println("ChannelHandlerContext "+ctx+" ChannelHandlerContext "+ctx.hashCode());
 		CommonCommand cmd = (CommonCommand)msg;
 		byte[] cardIdBinary = cmd.getDataCardId();
 		Long keyCardId = null;
@@ -83,8 +87,6 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 			udpClient = new UdpClient();
 			udpClient.setCardId(keyCardId);
 			udpClient.setCardIdBinary(cardIdBinary);
-			udpClient.setCtx(ctx);
-			udpClient.setDatagramPacket(cmd.getDatagramPacket());
 			mapCardUdpClient.put(keyCardId,udpClient);
 		}
 		//更新时间戳
@@ -105,24 +107,42 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 				//sendCommonCmd(keyCardId,1);//开机
 
 				//查询状态 packConfigQueryState PackDataUtils.packConfigQueryState(cardIdBinary)
-				CommonCommand cmdQuery = new CommonCommand(PackDataUtils.packQueryCmdByCardDeviceId(cardIdBinary),cardIdBinary);
+				//CommonCommand cmdQuery = new CommonCommand(PackDataUtils.packQueryCmdByCardDeviceId(cardIdBinary),cardIdBinary);
 				//cmds.offer(cmdQuery);
 
 				//sendCommonCmd(keyCardId,2);//关机
 
-				cmdQuery = new CommonCommand(PackDataUtils.packQueryCmdByCardDeviceId(cardIdBinary),cardIdBinary);
+				//cmdQuery = new CommonCommand(PackDataUtils.packQueryCmdByCardDeviceId(cardIdBinary),cardIdBinary);
 				//cmds.offer(cmdQuery);
-				Long fianlCid = keyCardId;
+
+				/** 测试状态查询...
+				final long cid = keyCardId;
 				new Thread(()->{
 					try {
-						Integer state = queryState(fianlCid);
-						System.out.println("state : "+state);
+						sendCommonCmd(cid,1,false);//开机
+						System.out.println(Thread.currentThread().getName()+" before 1 ");
+						Integer state = checkState(cid);
+						System.out.println(Thread.currentThread().getName()+" state "+state);
 					} catch (Exception e) {
 						e.printStackTrace();
 					}
 				}).start();
 
+				//Thread.sleep(5000);
 
+
+
+				new Thread(()->{
+					try {
+						sendCommonCmd(cid,2,false);//关机
+						System.out.println(Thread.currentThread().getName()+" before 2 ");
+						Integer state = checkState(cid);
+						System.out.println(Thread.currentThread().getName()+" state "+state);
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}).start();
+				 */
 
 				//删除序号为1在节目
 				//sendDeleteItemCmd(keyCardId,1);
@@ -133,26 +153,21 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 
 			}else{
 				ctx.writeAndFlush(msg); //发送心跳包
-				writeCmdToCard(ctx, cmd, udpClient);
 			}
 		}else if(msg instanceof QueryStateCommand){//状态查询
-			System.out.println("状态查询："+udpClient.getState());
-			udpClient.setState(((QueryStateCommand)msg).getState());//状态设置...
-			System.out.println("状态查询："+udpClient.getState());
-			final UdpClient udpCt = udpClient;
-			new Thread(()->{
-				//udpCt.unLockState();
-				try{
-					System.err.println(" QueryStateCommand "+udpCt.stateQueue.size());
-					udpCt.stateQueue.put(1);
-					System.err.println(" QueryStateCommand "+udpCt.stateQueue.size());
-				}catch (Exception e){
-
-				}
-			}).start();
-		}else{
-			writeCmdToCard(ctx, cmd, udpClient);
+			QueryStateCommand queryStateCommand = (QueryStateCommand)msg;
+			int state = queryStateCommand.getState();
+			if(0==state || 1==state){ //查询状态响应数据包
+				//不阻塞NIO
+				UdpClient executorUdpClient = udpClient;
+				executor.execute(()->{
+					executorUdpClient.setState(state);//状态设置...
+					executorUdpClient.syncUnLockState();//解除Block
+				});
+			}
 		}
+		//刷新队列,并发送数据...
+		writeCmdToCard(ctx, cmd, udpClient);
 	}
 
 	/**
@@ -304,26 +319,42 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 		return mapCardUdpClient.containsKey(keyCardId);
 	}
 
-	public Integer queryState(Long keyCardId)throws Exception{
-		System.out.println(" queryState "+keyCardId);
+	/**
+	 * 检查控制卡是否开关屏
+	 * @param keyCardId 控制卡id
+	 * @return  1 开屏 0 关屏 其他 状态未知(如设备未上线,未读取到相应数据包)
+	 * @throws Exception
+	 */
+	public  Integer checkState(Long keyCardId)throws Exception{
+		/** other Solution
+		 AttributeKey attributeKey = AttributeKey.valueOf("");
+		 Attribute attribute = udpClient.getContext().channel().attr(attributeKey);
+		 attribute.get();
+		 */
 		UdpClient udpClient = mapCardUdpClient.get(keyCardId);
 		if(null==udpClient){
 			return -1;
 		}
-		System.out.println(" udpClient "+udpClient+" "+udpClient.getCtx());
-		byte[] cardIdBinary = udpClient.getCardIdBinary();
-		byte[] packData = PackDataUtils.packQueryCmdByCardDeviceId(cardIdBinary);
-		CommonCommand cmdQuery = new CommonCommand(packData,cardIdBinary,udpClient.getDatagramPacket());
-		udpClient.getCtx().writeAndFlush(cmdQuery);
-		FutureTask<Integer> task = new FutureTask<Integer>(()->{
-			//udpClient.lockState();
-			System.err.println("udpClient.stateQueue.take();"+udpClient.stateQueue.size());
-			udpClient.stateQueue.take();
-			System.err.println("udpClient.stateQueue.take();"+udpClient.stateQueue.size());
-			return udpClient.getState();
-		});
-		task.run();
-		return task.get();
+		synchronized (udpClient) { //lock 具体的控制卡...
+			FutureTask<Integer> task = new FutureTask<Integer>(() -> {
+				udpClient.syncLockState();//设置Block,将同步转换为异步驱动...
+				int state = udpClient.getState();
+				udpClient.setState(-1);
+				return state;
+			});
+			byte[] cardIdBinary = udpClient.getCardIdBinary();
+			byte[] packData = PackDataUtils.packQueryCmdByCardDeviceId(cardIdBinary);
+			CommonCommand cmdQuery = new CommonCommand(packData, cardIdBinary);
+			udpClient.getCmds().offer(cmdQuery);
+			task.run();//start...
+			return task.get();
+		}
+	}
+
+	//destory
+	public void destory() {
+		isRunCheckUdpClient = false;
+		executor.shutdown();
 	}
 
 	//测试发送指令
