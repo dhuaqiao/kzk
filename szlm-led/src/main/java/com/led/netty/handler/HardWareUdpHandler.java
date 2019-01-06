@@ -8,8 +8,6 @@ import com.led.netty.utils.PackDataUtils;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.util.Attribute;
-import io.netty.util.AttributeKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -335,7 +333,7 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 		if(null==udpClient){
 			return -1;
 		}
-		synchronized (udpClient) { //lock 具体的控制卡...
+		//synchronized (udpClient) { //lock 具体的控制卡...
 			FutureTask<Integer> task = new FutureTask<Integer>(() -> {
 				udpClient.syncLockState();//设置Block,将同步转换为异步驱动...
 				int state = udpClient.getState();
@@ -348,7 +346,7 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 			udpClient.getCmds().offer(cmdQuery);
 			task.run();//start...
 			return task.get();
-		}
+		//}
 	}
 
 	//destory

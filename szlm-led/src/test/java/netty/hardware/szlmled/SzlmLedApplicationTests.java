@@ -67,6 +67,9 @@ public class SzlmLedApplicationTests {
         data = PackDataUtils.packDeleteItem(null,new int[]{1,3});
         System.out.println(PackDataUtils.binaryToHexString(data));
 
+        data = PackDataUtils.packHeartHardWareCmdByCardDeviceId(new byte[]{0x31,0x38,0x31,0x32,0x32,0x36});
+        System.out.println(PackDataUtils.binaryToHexString(data));
+
     }
 
     //@Test

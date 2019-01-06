@@ -25,7 +25,7 @@ public class NettyServerApp {
 		});
 	}
 
-	@SpringBootApplication(scanBasePackages = { "com.led.netty.config", "com.led.netty" })
+	@SpringBootApplication(scanBasePackages = { "com.led.netty.config", "com.led.netty","com.led.netty.http" })
 	static class Initializer{
 		@Autowired
 		private NettyUdpServerConfig nettyUdpServerConfig;
