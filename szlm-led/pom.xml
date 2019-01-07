@@ -53,6 +53,12 @@
             <version>4.1.32.Final</version>
         </dependency>
 
+        <!-- https://mvnrepository.com/artifact/org.t-io/tio-core -->
+        <dependency>
+            <groupId>org.t-io</groupId>
+            <artifactId>tio-core</artifactId>
+            <version>3.2.5.v20190101-RELEASE</version>
+        </dependency>
 
 
     </dependencies>

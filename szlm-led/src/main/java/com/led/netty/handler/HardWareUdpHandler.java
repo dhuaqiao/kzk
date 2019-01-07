@@ -27,7 +27,6 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 	//存取CMD集合 -- 控制卡ID-CMD
 	private  Map<Long,UdpClient> mapCardUdpClient = new ConcurrentHashMap<>();
 
-
 	public volatile boolean isRunCheckUdpClient = true;
 
 	//超时时间 单位s
@@ -36,10 +35,17 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 	//执行器
 	private ExecutorService executor = Executors.newCachedThreadPool();
 
+	/**
+	 * This method is visible for testing!
+	 */
+	private final long ticksInMillis() {
+		return System.currentTimeMillis();
+	}
+
 	@PostConstruct
 	public void startCheck() {
 		//启动检测UdpClient 守护线程
-		Thread thread = new Thread(){
+		Thread startCheckThread = new Thread(){
 			@Override
 			public void run() {
 				while (isRunCheckUdpClient){
@@ -64,9 +70,9 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 				}
 			}
 		};
-		thread.setDaemon(true);
-		thread.setName("Thread-Daemon-CheckUdpClient");
-		thread.start();
+		startCheckThread.setDaemon(true);
+		startCheckThread.setName("Thread-Daemon-CheckUdpClient");
+		startCheckThread.start();
 	}
 
 	@Override
@@ -88,7 +94,7 @@ public class HardWareUdpHandler extends SimpleChannelInboundHandler<Object>{
 			mapCardUdpClient.put(keyCardId,udpClient);
 		}
 		//更新时间戳
-		udpClient.setUnixTimeStamp(System.currentTimeMillis());
+		udpClient.setUnixTimeStamp(ticksInMillis());
 		final Queue<CommonCommand> cmds = udpClient.getCmds();
 		if(msg instanceof HeartBeatCommand) {
 			if(udpClient.isInit()){
